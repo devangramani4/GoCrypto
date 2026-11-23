@@ -219,3 +219,36 @@ describe('push notification tokens', () => {
     expect(await devicePush(b.id)).toBe(0);
   });
 });
+
+describe('web session cookies', () => {
+  type Cookie = { name: string; value: string; httpOnly?: boolean; path?: string };
+  const refresh = (cookie: string) =>
+    h.app.inject({
+      method: 'POST',
+      url: '/api/v1/auth/refresh',
+      headers: { 'x-gc-client': 'web', cookie, 'x-device-id': 'test-device-0001', 'user-agent': 'vitest', 'content-type': 'application/json' },
+      payload: '{}',
+    });
+
+  it('keeps the refresh token in an httpOnly cookie, sets a readable hint, and clears both when refresh fails', async () => {
+    const u = await createUser(h);
+    const res = await api(h, 'POST', '/api/v1/auth/login', { body: { email: u.email, password: u.password }, headers: { 'x-gc-client': 'web' } });
+    expect(res.statusCode).toBe(200);
+    expect(res.json().tokens.refreshToken).toBe('');
+    const cookies = res.cookies as Cookie[];
+    const rt = cookies.find((c) => c.name === 'gc_rt')!;
+    const hint = cookies.find((c) => c.name === 'gc_has_session')!;
+    expect(rt.httpOnly).toBe(true);
+    expect(rt.path).toBe('/api/v1/auth');
+    expect(hint.value).toBe('1');
+    expect(hint.httpOnly).toBeFalsy();
+
+    const ok = await refresh(`gc_rt=${rt.value}`);
+    expect(ok.statusCode).toBe(200);
+
+    const bad = await refresh('gc_rt=not-a-valid-refresh-token');
+    expect(bad.statusCode).toBe(401);
+    const cleared = (bad.cookies as Cookie[]).find((c) => c.name === 'gc_has_session');
+    expect(cleared?.value).toBe('');
+  });
+});
