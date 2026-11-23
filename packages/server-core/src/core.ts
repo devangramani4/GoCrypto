@@ -7,7 +7,14 @@ import { type Logger, getLogger } from './logger';
 import { initMetrics } from './metrics';
 import { QueueService } from './queues';
 import { RedisClients, RedisLock } from './redis';
+import { ApiKeyService } from './services/apikeys';
 import { AuditService } from './services/audit';
+import { AuthService } from './services/auth';
+import { WalletOpsService } from './services/wallet-ops';
+import { AdminService } from './services/admin';
+import { FundingService } from './services/funding';
+import { MarketQueries } from './services/market-queries';
+import { PortfolioService } from './services/portfolio';
 import { FeeService } from './services/fees';
 import { FuturesService } from './services/futures';
 import { OptionsService } from './services/options';
@@ -48,6 +55,13 @@ export class Core {
   readonly orders: OrderRepository;
   readonly futures: FuturesService;
   readonly options: OptionsService;
+  readonly auth: AuthService;
+  readonly apiKeys: ApiKeyService;
+  readonly walletOps: WalletOpsService;
+  readonly portfolio: PortfolioService;
+  readonly funding: FundingService;
+  readonly marketQueries: MarketQueries;
+  readonly admin: AdminService;
   private subscriber: EventSubscriber | null = null;
   private refreshTimer: NodeJS.Timeout | null = null;
 
@@ -71,6 +85,13 @@ export class Core {
     this.orders = new OrderRepository(this);
     this.futures = new FuturesService(this);
     this.options = new OptionsService(this);
+    this.auth = new AuthService(this);
+    this.apiKeys = new ApiKeyService(this);
+    this.walletOps = new WalletOpsService(this, this.auth);
+    this.portfolio = new PortfolioService(this);
+    this.funding = new FundingService(this);
+    this.marketQueries = new MarketQueries(this);
+    this.admin = new AdminService(this);
   }
 
   static async create(serviceName: string, opts: CoreOptions = {}): Promise<Core> {

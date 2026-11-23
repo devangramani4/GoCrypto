@@ -152,3 +152,16 @@ describe('indicators', () => {
     expect(rsi(up, 14)[19]).toBe(100);
   });
 });
+
+describe('address encoding', () => {
+  it('round-trips segwit and base58check encodings', async () => {
+    const { encodeSegwitAddress, base58CheckEncode, XRP_BASE58_ALPHABET } = await import('../index');
+    const program = new Uint8Array(20).map((_, i) => i * 7);
+    const bc = encodeSegwitAddress('bc', 0, program);
+    expect(validateAddress('BTC', bc).valid).toBe(true);
+    const tron = base58CheckEncode(new Uint8Array([0x41, ...program]));
+    expect(validateAddress('TRON', tron).valid).toBe(true);
+    const xrp = base58CheckEncode(new Uint8Array([0x00, ...program]), XRP_BASE58_ALPHABET);
+    expect(validateAddress('XRP', xrp).valid).toBe(true);
+  });
+});

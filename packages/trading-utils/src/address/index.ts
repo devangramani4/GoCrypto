@@ -148,6 +148,24 @@ function convertBits(data: number[], from: number, to: number, pad: boolean): nu
   return out;
 }
 
+function bech32CreateChecksum(hrp: string, data: number[], variant: 'bech32' | 'bech32m'): number[] {
+  const values = [...hrpExpand(hrp), ...data, 0, 0, 0, 0, 0, 0];
+  const mod = bech32Polymod(values) ^ (variant === 'bech32' ? BECH32_CONST : BECH32M_CONST);
+  const out: number[] = [];
+  for (let i = 0; i < 6; i++) out.push((mod >>> (5 * (5 - i))) & 31);
+  return out;
+}
+
+/** Encode a segwit address (v0 = bech32, v1+ = bech32m). */
+export function encodeSegwitAddress(hrp: string, version: number, program: Uint8Array): string {
+  const data = [version, ...(convertBits([...program], 8, 5, true) ?? [])];
+  const variant = version === 0 ? 'bech32' : 'bech32m';
+  const checksum = bech32CreateChecksum(hrp, data, variant);
+  return `${hrp}1${[...data, ...checksum].map((d) => BECH32_CHARSET[d]).join('')}`;
+}
+
+export const XRP_BASE58_ALPHABET = XRP_ALPHABET;
+
 function validateSegwit(addr: string, hrp: string): boolean {
   const dec = bech32Decode(addr);
   if (!dec || dec.hrp !== hrp || dec.data.length < 1) return false;
