@@ -1,0 +1,17 @@
+{
+  "name": "@gocrypto/loadtest",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Load-test toolkit: user seeding and mixed-scenario load generator (WebSocket viewers, market readers, account readers, traders, login storms)",
+  "type": "module",
+  "scripts": {
+    "seed": "tsx src/seed.ts",
+    "run": "tsx src/run.ts",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "test": "echo 'load generator: run it against a deployed sandbox stack (see README.md)'"
+  },
+  "dependencies": {
+    "@gocrypto/server-core": "workspace:*",
+    "undici": "^6.21.3"
+  }
+}

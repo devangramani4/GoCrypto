@@ -44,3 +44,7 @@ apps/mobile/android/
 # local data
 .data/
 *.sqlite
+
+# load-test outputs (users files hold live session tokens)
+tools/loadtest/users*.json
+tools/loadtest/results/
