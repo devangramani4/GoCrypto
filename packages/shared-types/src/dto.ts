@@ -46,6 +46,16 @@ export interface OffsetPage<T> {
   total: number;
 }
 
+// ───────────────────────────── system ─────────────────────────────
+
+export interface SystemStatusDto {
+  /** SANDBOX = paper trading with simulated deposits; LIVE requires a completed regulatory review. */
+  mode: 'SANDBOX' | 'LIVE';
+  serverTime: Timestamp;
+  version: string;
+  simulatedDeposits: boolean;
+}
+
 // ───────────────────────────── users & auth ─────────────────────────────
 
 export interface UserDto {

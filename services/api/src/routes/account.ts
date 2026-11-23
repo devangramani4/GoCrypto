@@ -63,6 +63,13 @@ export async function notificationRoutes(app: FastifyInstance, { core }: ApiDeps
 
 export async function healthRoutes(app: FastifyInstance, { core, runner }: ApiDeps): Promise<void> {
   app.get('/health', { config: { rateLimit: false } }, async () => ({ status: 'ok', service: 'api', mode: core.config.TRADING_MODE, ts: Date.now() }));
+  // Public, cacheable platform status for clients (sandbox banner, server clock offset).
+  app.get('/api/v1/system/status', { config: { rateLimit: false } }, async () => ({
+    mode: core.config.TRADING_MODE,
+    serverTime: Date.now(),
+    version: process.env.npm_package_version ?? '0.1.0',
+    simulatedDeposits: core.config.TRADING_MODE === 'SANDBOX',
+  }));
   app.get('/ready', { config: { rateLimit: false } }, async (_req, reply) => {
     try {
       const [db, redis] = await Promise.all([core.db.ping(), core.redis.ping()]);
