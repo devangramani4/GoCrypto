@@ -61,6 +61,13 @@ docker compose logs -f api matching-engine
   `conf.d/gocrypto-tls.conf.example` is the TLS variant (HTTP→HTTPS redirect, HSTS, OCSP stapling,
   admin host restricted to internal networks).
 
+## Free public demo (one container)
+
+`infrastructure/demo/` packs the whole platform (MariaDB, Redis, every service, the web app and nginx) into a
+single sandbox-only container for showing GoCrypto without servers, for example on a free Hugging Face Docker
+Space. Data is wiped whenever the container is recreated, so it is never a substitute for the deployments
+above. See [infrastructure/demo/README.md](../infrastructure/demo/README.md).
+
 ## PM2 (VMs without containers)
 
 ```bash
