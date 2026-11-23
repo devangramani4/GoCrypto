@@ -1,0 +1,18 @@
+// GitHub Codespaces: builds and runs the GoCrypto sandbox demo (infrastructure/demo) on port 7860.
+// Open it with:
+// https://codespaces.new/devangramani4/GoCrypto?devcontainer_path=.devcontainer/demo/devcontainer.json
+{
+  "name": "GoCrypto demo (sandbox)",
+  "image": "mcr.microsoft.com/devcontainers/base:bookworm",
+  "features": {
+    "ghcr.io/devcontainers/features/docker-in-docker:2": {},
+    "ghcr.io/devcontainers/features/github-cli:1": {}
+  },
+  "hostRequirements": { "cpus": 2, "memory": "8gb" },
+  "forwardPorts": [7860],
+  "portsAttributes": {
+    "7860": { "label": "GoCrypto demo", "onAutoForward": "openBrowser" }
+  },
+  "postCreateCommand": "bash .devcontainer/demo/demo.sh build",
+  "postStartCommand": "bash .devcontainer/demo/demo.sh start"
+}
