@@ -193,9 +193,11 @@ export async function runSeed(core: Core, opts: SeedOptions = {}): Promise<SeedR
   const mm = await ensureUser(SYSTEM_EMAILS.marketMaker, 'USER', true, null, 'GoCrypto Market Maker');
   await ensureUser(SYSTEM_EMAILS.feeCollector, 'USER', true, null, 'GoCrypto Fee Collector');
   const ins = await ensureUser(SYSTEM_EMAILS.insuranceFund, 'USER', true, null, 'GoCrypto Insurance Fund');
+  const flow = await ensureUser(SYSTEM_EMAILS.flowTrader, 'USER', true, null, 'GoCrypto Flow Simulator');
   if (core.config.isSandbox) {
     await credit(mm.id, MARKET_MAKER_BALANCES, 'mm');
     await credit(ins.id, INSURANCE_FUND_BALANCES, 'ins');
+    await credit(flow.id, MARKET_MAKER_BALANCES, 'flow');
   }
   log('system accounts');
 

@@ -1,4 +1,28 @@
+import { existsSync } from 'node:fs';
+import path from 'node:path';
 import { z } from 'zod';
+
+/** Load the nearest .env (repo root) once; never overrides variables already set; skipped in tests. */
+function loadDotEnv(env: NodeJS.ProcessEnv): void {
+  if (env !== process.env || env.NODE_ENV === 'test' || env.GOCRYPTO_SKIP_DOTENV === '1') return;
+  const explicit = env.ENV_FILE;
+  const candidates: string[] = [];
+  if (explicit) candidates.push(path.resolve(explicit));
+  let dir = process.cwd();
+  for (let i = 0; i < 5; i++) {
+    candidates.push(path.join(dir, '.env'));
+    if (existsSync(path.join(dir, 'pnpm-workspace.yaml'))) break;
+    dir = path.dirname(dir);
+  }
+  const file = candidates.find((f) => existsSync(f));
+  if (file) {
+    try {
+      process.loadEnvFile(file);
+    } catch {
+      // malformed .env: fall back to the process environment
+    }
+  }
+}
 
 const bool = z
   .union([z.boolean(), z.string()])
@@ -99,6 +123,7 @@ let cached: AppConfig | null = null;
 
 export function loadConfig(env: NodeJS.ProcessEnv = process.env, opts: { reload?: boolean } = {}): AppConfig {
   if (cached && !opts.reload) return cached;
+  loadDotEnv(env);
   const parsed = envSchema.safeParse(env);
   if (!parsed.success) {
     const issues = parsed.error.issues.map((i) => `${i.path.join('.')}: ${i.message}`).join('; ');

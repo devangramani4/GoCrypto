@@ -43,6 +43,8 @@ export const SYSTEM_EMAILS = {
   marketMaker: 'marketmaker@system.gocrypto',
   feeCollector: 'fees@system.gocrypto',
   insuranceFund: 'insurance@system.gocrypto',
+  /** Sandbox taker-flow simulator (separate from the market maker to avoid self-trades). */
+  flowTrader: 'flow@system.gocrypto',
 } as const;
 
 export class UserService {
