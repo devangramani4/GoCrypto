@@ -1,0 +1,15 @@
+**/node_modules
+**/dist
+**/coverage
+**/.turbo
+apps/desktop/renderer
+apps/desktop/release
+apps/mobile/.expo
+apps/mobile/ios
+apps/mobile/android
+.git
+.env
+.env.*
+!.env.example
+**/*.log
+.data
