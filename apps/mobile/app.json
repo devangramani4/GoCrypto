@@ -1,0 +1,52 @@
+{
+  "expo": {
+    "name": "GoCrypto",
+    "slug": "gocrypto",
+    "scheme": "gocrypto",
+    "version": "0.1.0",
+    "orientation": "portrait",
+    "userInterfaceStyle": "automatic",
+    "backgroundColor": "#0A0D12",
+    "primaryColor": "#6C7CFF",
+    "ios": {
+      "bundleIdentifier": "com.gocrypto.app",
+      "supportsTablet": false,
+      "config": {
+        "usesNonExemptEncryption": false
+      }
+    },
+    "android": {
+      "package": "com.gocrypto.app",
+      "allowBackup": false,
+      "softwareKeyboardLayoutMode": "resize",
+      "permissions": ["POST_NOTIFICATIONS", "VIBRATE"],
+      "blockedPermissions": [
+        "android.permission.READ_EXTERNAL_STORAGE",
+        "android.permission.WRITE_EXTERNAL_STORAGE",
+        "android.permission.SYSTEM_ALERT_WINDOW"
+      ]
+    },
+    "plugins": [
+      "expo-secure-store",
+      [
+        "expo-local-authentication",
+        {
+          "faceIDPermission": "Allow GoCrypto to use Face ID to unlock the app and protect your account."
+        }
+      ],
+      [
+        "expo-notifications",
+        {
+          "color": "#6C7CFF",
+          "defaultChannel": "default"
+        }
+      ]
+    ],
+    "extra": {
+      "apiUrl": "http://localhost:4000",
+      "wsUrl": "http://localhost:4001",
+      "wsPath": "/socket.io",
+      "sandbox": true
+    }
+  }
+}
