@@ -341,6 +341,15 @@ export class AuthService {
       [reason, userId, ...ids],
     );
     await this.tokens.markRevoked(ids);
+    // A device with no remaining live session must stop receiving push notifications (logged-out phones,
+    // shared installs). Tokens are re-registered by the app after the next login.
+    await this.core.db.execute(
+      `UPDATE user_devices d SET d.push_token = NULL, d.push_provider = NULL
+        WHERE d.user_id = ? AND d.push_token IS NOT NULL
+          AND d.id IN (SELECT s.device_row_id FROM user_sessions s WHERE s.user_id = ? AND s.id IN (${ids.map(() => '?').join(',')}))
+          AND NOT EXISTS (SELECT 1 FROM user_sessions a WHERE a.device_row_id = d.id AND a.revoked_at IS NULL AND a.expires_at > CURRENT_TIMESTAMP(3))`,
+      [userId, userId, ...ids],
+    );
     this.core.bus.emit('session.revoked', { userId, sessionIds: ids });
     return res.affectedRows;
   }
@@ -403,7 +412,17 @@ export class AuthService {
 
   async registerPushToken(userId: string, ctx: RequestContext, token: string, provider: string): Promise<void> {
     const device = await this.upsertDevice(this.core.db, userId, ctx);
-    await this.core.db.execute('UPDATE user_devices SET push_token = ?, push_provider = ? WHERE id = ?', [token, provider, device.rowId]);
+    await this.core.db.transaction(async (tx) => {
+      // A push token identifies one app install: detach it from any other account/device first, so a
+      // previous user of a shared install never receives this user's notifications (or vice versa).
+      await tx.execute('UPDATE user_devices SET push_token = NULL, push_provider = NULL WHERE push_token = ? AND id <> ?', [token, device.rowId]);
+      await tx.execute('UPDATE user_devices SET push_token = ?, push_provider = ? WHERE id = ?', [token, provider, device.rowId]);
+    });
+  }
+
+  /** Stop push notifications for the calling device (sign-out, or the user disabled notifications). */
+  async unregisterPushToken(userId: string, ctx: RequestContext): Promise<void> {
+    await this.core.db.execute('UPDATE user_devices SET push_token = NULL, push_provider = NULL WHERE user_id = ? AND device_id = ?', [userId, deviceIdFrom(ctx)]);
   }
 
   async loginHistory(userId: string, limit = 50, cursor?: string): Promise<{ items: LoginHistoryDto[]; nextCursor: string | null }> {

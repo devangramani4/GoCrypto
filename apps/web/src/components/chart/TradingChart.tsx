@@ -224,7 +224,6 @@ export function TradingChart({ symbol, pricePrecision, tickSize, defaultInterval
     }
     if (indicators.includes('ATR')) {
       overlay('#22d3ee', (b) => lineData(b, atr(b, 14)), pane, 2);
-      pane += 1;
     }
     for (const p of chart.panes().slice(1)) p.setHeight(compact ? 70 : 96);
     seriesRef.current = next;

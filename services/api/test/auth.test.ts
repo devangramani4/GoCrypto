@@ -191,3 +191,31 @@ describe('API keys and RBAC', () => {
     expect(Number(audit!.c)).toBe(1);
   });
 });
+
+describe('push notification tokens', () => {
+  const pushToken = 'ExponentPushToken[shared-install-0001]';
+  const devicePush = async (userId: string) =>
+    (await h.core.db.query<{ push_token: string | null }>('SELECT push_token FROM user_devices WHERE user_id = ? AND push_token IS NOT NULL', [userId])).length;
+
+  it('detaches the push token when the device has no live session left (logout)', async () => {
+    const u = await createUser(h);
+    const reg = await api(h, 'POST', '/api/v1/auth/devices/push-token', { token: u.token, body: { token: pushToken, provider: 'EXPO' } });
+    expect(reg.statusCode).toBe(200);
+    expect(await devicePush(u.id)).toBe(1);
+    const out = await api(h, 'POST', '/api/v1/auth/logout', { token: u.token, body: {} });
+    expect(out.statusCode).toBeLessThan(300);
+    expect(await devicePush(u.id)).toBe(0);
+  });
+
+  it('moves a re-registered token to the new account on a shared install', async () => {
+    const a = await createUser(h);
+    const b = await createUser(h);
+    await api(h, 'POST', '/api/v1/auth/devices/push-token', { token: a.token, body: { token: pushToken, provider: 'EXPO' } });
+    await api(h, 'POST', '/api/v1/auth/devices/push-token', { token: b.token, body: { token: pushToken, provider: 'EXPO' } });
+    expect(await devicePush(a.id)).toBe(0);
+    expect(await devicePush(b.id)).toBe(1);
+    const del = await api(h, 'DELETE', '/api/v1/auth/devices/push-token', { token: b.token });
+    expect(del.statusCode).toBe(200);
+    expect(await devicePush(b.id)).toBe(0);
+  });
+});

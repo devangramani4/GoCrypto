@@ -3,12 +3,13 @@ import type { AssetDto, WithdrawalLimitsDto } from '@gocrypto/shared-types';
 import { screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
+import type * as ApiModule from '../lib/api';
 import { mockApi, resetMockApi } from '../test/mockApi';
 import { renderRoute, signIn } from '../test/render';
 import { WithdrawPage } from './DepositWithdraw';
 
 vi.mock('../lib/api', async () => {
-  const actual = await vi.importActual<typeof import('../lib/api')>('../lib/api');
+  const actual = await vi.importActual<typeof ApiModule>('../lib/api');
   const m = await import('../test/mockApi');
   return { ...actual, api: m.mockApi, realtime: m.fakeRealtime };
 });

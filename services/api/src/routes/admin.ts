@@ -44,7 +44,8 @@ export async function adminRoutes(app: FastifyInstance, deps: ApiDeps): Promise<
   r.get('/me', { config: { apiKey: false } }, async (req) => {
     const a = requireSession(req);
     if (!ADMIN_ROLES.includes(a.role)) throw new AppError('FORBIDDEN', 'Admin access required');
-    return { userId: a.userId, role: a.role, permissions: core.users.permissionsFor(a.role) };
+    const u = await core.users.findById(a.userId);
+    return { userId: a.userId, email: u?.email ?? null, displayName: u?.display_name ?? null, role: a.role, permissions: core.users.permissionsFor(a.role) };
   });
   r.get('/dashboard', can('dashboard.read'), async () => core.admin.dashboard());
 
@@ -90,7 +91,11 @@ export async function adminRoutes(app: FastifyInstance, deps: ApiDeps): Promise<
     await audit(req, 'admin.user.revoke_sessions', 'USER', req.params.id);
     return { revoked: n };
   });
-  r.get('/users/:id/login-history', { schema: { params: idParam }, ...can('users.read') }, async (req) => core.auth.loginHistory(req.params.id, 100));
+  r.get(
+    '/users/:id/login-history',
+    { schema: { params: idParam, querystring: z.object({ cursor: z.string().regex(/^\d{1,20}$/).optional(), limit: z.coerce.number().int().min(1).max(200).default(50) }) }, ...can('users.read') },
+    async (req) => core.auth.loginHistory(req.params.id, req.query.limit, req.query.cursor),
+  );
   r.get('/users/:id/orders', { schema: { params: idParam, querystring: adminOrdersQuery }, ...can('orders.read') }, async (req) =>
     core.admin.orders({ ...req.query, userId: req.params.id }),
   );

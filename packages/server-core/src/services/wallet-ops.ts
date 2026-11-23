@@ -4,6 +4,7 @@ import type {
   DepositAddressDto,
   DepositDto,
   DepositStatus,
+  NotificationType,
   TransferDto,
   WithdrawalDto,
   WithdrawalLimitsDto,
@@ -21,7 +22,7 @@ import type { AuthService, RequestContext } from './auth';
 import { type CustodyProvider, SandboxCustody } from './custody';
 import { scoreWithdrawal } from './withdrawal-risk';
 
-interface WithdrawalRow {
+export interface WithdrawalRow {
   id: string;
   user_id: string;
   asset_id: number;
@@ -168,7 +169,8 @@ export class WalletOpsService {
     return { status: result.status, credited: result.credited };
   }
 
-  private depositDto(r: Record<string, unknown>): DepositDto {
+  /** Maps a `deposits` row (also used by admin listings to avoid per-row lookups). */
+  depositDto(r: Record<string, unknown>): DepositDto {
     return {
       id: String(r.id),
       asset: this.core.assets.symbolOf(Number(r.asset_id)),
@@ -201,7 +203,8 @@ export class WalletOpsService {
 
   // ───────────────────────── withdrawals ─────────────────────────
 
-  private withdrawalDto(r: WithdrawalRow): WithdrawalDto {
+  /** Maps a `withdrawals` row (also used by admin listings to avoid per-row lookups). */
+  withdrawalDto(r: WithdrawalRow): WithdrawalDto {
     return {
       id: String(r.id),
       asset: this.core.assets.symbolOf(Number(r.asset_id)),
@@ -545,7 +548,7 @@ export class WalletOpsService {
     });
     metrics.withdrawalsTotal.inc({ status });
     const asset = this.core.assets.symbolOf(Number(row.asset_id));
-    const messages: Record<typeof status, [import('@gocrypto/shared-types').NotificationType, string, string]> = {
+    const messages: Record<typeof status, [NotificationType, string, string]> = {
       COMPLETED: ['WITHDRAWAL_PROCESSED', 'Withdrawal completed', `${toPlain(D(row.amount).minus(row.fee))} ${asset} was sent.`],
       FAILED: ['WITHDRAWAL_REJECTED', 'Withdrawal failed', `Your ${asset} withdrawal failed; funds were returned to your wallet.`],
       REJECTED: ['WITHDRAWAL_REJECTED', 'Withdrawal rejected', `Your ${asset} withdrawal was rejected after review; funds were returned.`],

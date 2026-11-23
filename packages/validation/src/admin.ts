@@ -22,6 +22,11 @@ import {
 
 const reason = z.string().trim().min(3).max(500);
 const rate = decimalString.refine((v) => Number(v) < 0.1, 'Fee rate must be below 10%');
+/** Maker rates may be negative (rebates) but are bounded on both sides. */
+const makerRate = z
+  .string()
+  .regex(/^-?\d+(\.\d+)?$/)
+  .refine((v) => Number(v) > -0.01 && Number(v) < 0.1, 'Maker rate must be between -1% (rebate) and 10%');
 
 export const adminUserListQuery = pageQuery.extend({
   q: z.string().trim().max(100).optional(),
@@ -123,7 +128,7 @@ export const adminFeeScheduleSchema = z.object({
       z.object({
         marketType: marketTypeSchema,
         vipTier: z.number().int().min(0).max(9),
-        makerRate: z.string().regex(/^-?\d+(\.\d+)?$/),
+        makerRate,
         takerRate: rate,
       }),
     )
@@ -132,7 +137,7 @@ export const adminFeeScheduleSchema = z.object({
 
 export const adminUserFeeSchema = z.object({
   marketType: marketTypeSchema,
-  makerRate: z.string().regex(/^-?\d+(\.\d+)?$/),
+  makerRate,
   takerRate: rate,
   expiresAt: z.number().int().positive().nullable().optional(),
 });

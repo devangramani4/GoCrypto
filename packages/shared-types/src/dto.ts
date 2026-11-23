@@ -787,10 +787,13 @@ export interface UserFeeOverrideDto {
 export interface RevenueReportRowDto {
   period: string;
   marketType: MarketType | 'WITHDRAWAL';
+  /** Asset the fees were charged in. */
   asset: string;
   fees: DecimalString;
   trades: number;
+  /** Trading: quote notional of the fills; withdrawals: amount withdrawn. Denominated in `volumeAsset`. */
   volume: DecimalString;
+  volumeAsset: string;
 }
 
 export interface ServiceHealthDto {

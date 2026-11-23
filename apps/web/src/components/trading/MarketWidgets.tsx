@@ -4,7 +4,7 @@ import { Icon, Skeleton, cx } from '@gocrypto/ui';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate } from 'react-router';
 import { fmtCountdown, fmtPrice, fmtTime, formatPercent } from '../../lib/format';
-import { useMarkets, useRecentTrades, useTicker, useTickers } from '../../lib/hooks';
+import { useMarkets, useNow, useRecentTrades, useTicker, useTickers } from '../../lib/hooks';
 import { usePrefs } from '../../stores/session';
 import { AssetIcon, ChangePct, LivePrice } from '../common';
 
@@ -34,11 +34,7 @@ export function RecentTrades({ market }: { market: MarketDto }) {
 }
 
 function FundingCountdown({ next }: { next: number }) {
-  const [now, setNow] = useState(Date.now());
-  useEffect(() => {
-    const t = setInterval(() => setNow(Date.now()), 1000);
-    return () => clearInterval(t);
-  }, []);
+  const now = useNow(1000);
   return <span className="num">{fmtCountdown(next - now)}</span>;
 }
 

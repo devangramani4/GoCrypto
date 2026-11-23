@@ -329,7 +329,7 @@ export class OrderBook {
     const stp = t.stp ?? 'EXPIRE_MAKER';
     let remaining = t.quantity ?? null;
     let budget = t.quoteBudget ?? null;
-    let stop: StopReason = null;
+    let stop: StopReason;
 
     while (true) {
       if (remaining && remaining.lte(0)) {

@@ -8,6 +8,7 @@ import { Navigate, useNavigate, useParams } from 'react-router';
 import { CopyButton, QrCode } from '../../components/common';
 import { api, errorMessage } from '../../lib/api';
 import { fmtDateTime, humanize } from '../../lib/format';
+import { useNow } from '../../lib/hooks';
 import { usePrefs, useSession } from '../../stores/session';
 
 type Tab = 'profile' | 'security' | 'devices' | 'api-keys' | 'preferences';
@@ -160,6 +161,7 @@ function SecurityTab() {
   const user = useSession((s) => s.user)!;
   const security = useQuery({ queryKey: ['security'], queryFn: () => api.auth.security() });
   const [modal, setModal] = useState<'password' | 'enable2fa' | 'disable2fa' | 'pin' | null>(null);
+  const now = useNow(60_000);
   const s = security.data;
   return (
     <div className="col" style={{ gap: 16 }}>
@@ -171,7 +173,7 @@ function SecurityTab() {
               <strong className="num">{s.securityScore}/100</strong>
             </div>
             <Progress value={s.securityScore} tone={s.securityScore >= 70 ? 'up' : s.securityScore >= 40 ? 'warn' : 'down'} />
-            {s.withdrawalLockUntil && s.withdrawalLockUntil > Date.now() && <Alert tone="warn">Withdrawals are locked until {fmtDateTime(s.withdrawalLockUntil)} after a recent security change.</Alert>}
+            {s.withdrawalLockUntil && s.withdrawalLockUntil > now && <Alert tone="warn">Withdrawals are locked until {fmtDateTime(s.withdrawalLockUntil)} after a recent security change.</Alert>}
           </div>
         ) : (
           <Skeleton height={60} />

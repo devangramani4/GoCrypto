@@ -1,7 +1,7 @@
 import type { SVGProps } from 'react';
 
 /** Minimal stroke icon set (24x24 grid, currentColor). */
-const paths: Record<string, string> = {
+const paths = {
   home: 'M3 10.5 12 3l9 7.5V20a1 1 0 0 1-1 1h-5v-6h-6v6H4a1 1 0 0 1-1-1z',
   chart: 'M3 3v18h18M7 15l4-4 3 3 5-6',
   candles: 'M6 3v4M6 17v4M4 7h4v10H4zM18 3v6M18 17v4M16 9h4v8h-4zM12 6v3M12 15v3M10 9h4v6h-4z',
@@ -60,7 +60,7 @@ const paths: Record<string, string> = {
   dollar: 'M12 1v22M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6',
   server: 'M2 2h20v8H2zM2 14h20v8H2zM6 6h.01M6 18h.01',
   file: 'M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8zM14 2v6h6',
-};
+} satisfies Record<string, string>;
 
 export type IconName = keyof typeof paths;
 

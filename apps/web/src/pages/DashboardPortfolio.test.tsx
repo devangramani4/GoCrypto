@@ -1,13 +1,14 @@
 import type { PortfolioSummaryDto } from '@gocrypto/shared-types';
 import { screen, within } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
+import type * as ApiModule from '../lib/api';
 import { mockApi, resetMockApi } from '../test/mockApi';
 import { renderRoute, signIn } from '../test/render';
 import { DashboardPage } from './DashboardPage';
 import { PortfolioPage } from './PortfolioPage';
 
 vi.mock('../lib/api', async () => {
-  const actual = await vi.importActual<typeof import('../lib/api')>('../lib/api');
+  const actual = await vi.importActual<typeof ApiModule>('../lib/api');
   const m = await import('../test/mockApi');
   return { ...actual, api: m.mockApi, realtime: m.fakeRealtime };
 });

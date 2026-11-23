@@ -143,6 +143,7 @@ export class GoCryptoClient {
     updateDevice: (id: string, body: { name?: string; trusted?: boolean }) => this.patch<{ ok: true }>(`/api/v1/auth/devices/${id}`, body),
     removeDevice: (id: string) => this.del<void>(`/api/v1/auth/devices/${id}`),
     registerPushToken: (token: string, provider: 'EXPO' | 'FCM' | 'APNS' | 'WEB') => this.post<{ ok: true }>('/api/v1/auth/devices/push-token', { token, provider }),
+    unregisterPushToken: () => this.del<{ ok: true }>('/api/v1/auth/devices/push-token'),
     loginHistory: (cursor?: string) => this.get<CursorPage<LoginHistoryDto>>('/api/v1/auth/login-history', { cursor }),
   };
 
@@ -150,7 +151,8 @@ export class GoCryptoClient {
     me: () => this.get<UserDto>('/api/v1/users/me'),
     update: (body: { displayName?: string; locale?: string; antiPhishingCode?: string }) => this.patch<UserDto>('/api/v1/users/me', body),
     settings: () => this.get<UserSettingsDto>('/api/v1/users/me/settings'),
-    updateSettings: (body: Partial<UserSettingsDto>) => this.put<UserSettingsDto>('/api/v1/users/me/settings', body),
+    updateSettings: (body: Omit<Partial<UserSettingsDto>, 'notificationPrefs'> & { notificationPrefs?: Partial<{ [C in keyof UserSettingsDto['notificationPrefs']]: Partial<UserSettingsDto['notificationPrefs'][C]> }> }) =>
+      this.put<UserSettingsDto>('/api/v1/users/me/settings', body),
     apiKeys: () => this.get<ApiKeyDto[]>('/api/v1/users/me/api-keys'),
     createApiKey: (body: { label: string; permissions: string[]; ipWhitelist?: string[]; totpCode?: string }) =>
       this.post<ApiKeyCreatedDto>('/api/v1/users/me/api-keys', body),
@@ -273,7 +275,7 @@ export class GoCryptoClient {
   };
 
   readonly admin = {
-    me: () => this.get<{ userId: string; role: string; permissions: Permission[] }>('/api/v1/admin/me'),
+    me: () => this.get<{ userId: string; email: string | null; displayName: string | null; role: string; permissions: Permission[] }>('/api/v1/admin/me'),
     dashboard: () => this.get<AdminDashboardDto>('/api/v1/admin/dashboard'),
     users: (q: Q = {}) => this.get<OffsetPage<AdminUserListItemDto>>('/api/v1/admin/users', q),
     user: (id: string) => this.get<AdminUserDetailDto>(`/api/v1/admin/users/${id}`),
@@ -285,7 +287,7 @@ export class GoCryptoClient {
     resetSecurity: (id: string, body: { reason: string; resetTwoFactor?: boolean; resetPin?: boolean; revokeSessions?: boolean }) =>
       this.post<{ ok: true }>(`/api/v1/admin/users/${id}/reset-security`, body),
     revokeSessions: (id: string) => this.post<{ revoked: number }>(`/api/v1/admin/users/${id}/revoke-sessions`),
-    userLoginHistory: (id: string) => this.get<CursorPage<LoginHistoryDto>>(`/api/v1/admin/users/${id}/login-history`),
+    userLoginHistory: (id: string, cursor?: string) => this.get<CursorPage<LoginHistoryDto>>(`/api/v1/admin/users/${id}/login-history`, { cursor }),
     userOrders: (id: string, q: Q = {}) => this.get<OffsetPage<OrderDto & { userEmail: string }>>(`/api/v1/admin/users/${id}/orders`, q),
     userLedger: (id: string, cursor?: string) => this.get<CursorPage<LedgerEntryDto>>(`/api/v1/admin/users/${id}/ledger`, { cursor }),
     userFees: (id: string) => this.get<{ marketType: MarketType; makerRate: string; takerRate: string; expiresAt: number | null }[]>(`/api/v1/admin/users/${id}/fees`),
@@ -306,7 +308,7 @@ export class GoCryptoClient {
     cancelOrder: (id: string, reason: string) => this.post<OrderDto>(`/api/v1/admin/orders/${id}/cancel`, { reason }),
     trades: (q: Q = {}) => this.get<OffsetPage<Record<string, unknown>>>('/api/v1/admin/trades', q),
     liquidations: (q: Q = {}) => this.get<Record<string, unknown>[]>('/api/v1/admin/liquidations', q),
-    deposits: (q: Q = {}) => this.get<OffsetPage<DepositDto & { userEmail: string }>>('/api/v1/admin/deposits', q),
+    deposits: (q: Q = {}) => this.get<OffsetPage<DepositDto & { userId: string; userEmail: string }>>('/api/v1/admin/deposits', q),
     withdrawals: (q: Q = {}) =>
       this.get<OffsetPage<WithdrawalDto & { userId: string; userEmail: string; riskScore: number; amountUsd: string }>>('/api/v1/admin/withdrawals', q),
     reviewWithdrawal: (id: string, decision: 'APPROVE' | 'REJECT', note?: string) =>

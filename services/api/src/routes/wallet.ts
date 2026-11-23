@@ -1,19 +1,7 @@
 import type { AccountType, WalletOverviewDto } from '@gocrypto/shared-types';
 import { ACCOUNT_TYPES } from '@gocrypto/shared-types';
 import { D, ZERO } from '@gocrypto/trading-utils';
-import {
-  accountTransferSchema,
-  addressBookSchema,
-  assetSymbol,
-  depositAddressQuery,
-  idString,
-  internalTransferSchema,
-  simulateDepositSchema,
-  validateAddressSchema,
-  walletHistoryQuery,
-  withdrawSchema,
-  withdrawalLimitsQuery,
-} from '@gocrypto/validation';
+import { accountTransferSchema, addressBookSchema, assetSymbol, booleanQuery, depositAddressQuery, idString, internalTransferSchema, simulateDepositSchema, validateAddressSchema, walletHistoryQuery, withdrawalLimitsQuery, withdrawSchema } from '@gocrypto/validation';
 import type { FastifyInstance } from 'fastify';
 import type { ZodTypeProvider } from 'fastify-type-provider-zod';
 import { z } from 'zod';
@@ -49,7 +37,7 @@ export async function walletRoutes(app: FastifyInstance, { core }: ApiDeps): Pro
 
   r.get(
     '/balances',
-    { schema: { querystring: z.object({ account: z.enum(ACCOUNT_TYPES).optional(), includeZero: z.coerce.boolean().optional() }) }, preHandler: authenticated, config: { apiKey: 'READ' } },
+    { schema: { querystring: z.object({ account: z.enum(ACCOUNT_TYPES).optional(), includeZero: booleanQuery.optional() }) }, preHandler: authenticated, config: { apiKey: 'READ' } },
     async (req) => core.wallet.balances(requireUser(req).userId, req.query.account as AccountType | undefined, req.query.includeZero ?? false),
   );
 

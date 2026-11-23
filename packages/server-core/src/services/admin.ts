@@ -19,6 +19,8 @@ import { parseJson, toMs, toMsStrict } from '../db/database';
 import { AppError } from '../errors';
 import { key } from '../redis';
 import type { UserRow } from './users';
+import type { OrderRow } from './orders';
+import type { WithdrawalRow } from './wallet-ops';
 
 type Page<T> = { items: T[]; page: number; pageSize: number; total: number };
 
@@ -79,6 +81,14 @@ export class AdminService {
     );
     const byHour = new Map<string, ReturnType<typeof D>>();
     for (const r of series) byHour.set(r.h, (byHour.get(r.h) ?? ZERO).plus(usd(Number(r.quote_asset_id), r.q)));
+    const feeSeries = await db.query<{ h: string; asset_id: number; s: string }>(
+      `SELECT DATE_FORMAT(created_at, '%Y-%m-%d %H:00:00') AS h, asset_id, SUM(available_delta) AS s FROM wallet_transactions
+        WHERE user_id = ? AND type = 'FEE_REVENUE' AND created_at >= NOW(3) - INTERVAL 1 DAY GROUP BY h, asset_id`,
+      [feeUser],
+    );
+    const feesByHour = new Map<string, ReturnType<typeof D>>();
+    for (const r of feeSeries) feesByHour.set(r.h, (feesByHour.get(r.h) ?? ZERO).plus(usd(Number(r.asset_id), r.s)));
+    const hours = [...new Set([...byHour.keys(), ...feesByHour.keys()])].sort();
     return {
       users: {
         total: Number(users?.total ?? 0),
@@ -99,7 +109,11 @@ export class AdminService {
       },
       revenue: { fees24hUsd: toPlain((await fees(1)).toDecimalPlaces(2)), fees30dUsd: toPlain((await fees(30)).toDecimalPlaces(2)) },
       security: { openAlerts: Number(alerts?.c ?? 0), failedLogins24h: Number(failed?.c ?? 0) },
-      volumeSeries: [...byHour.entries()].map(([h, v]) => ({ t: new Date(`${h.replace(' ', 'T')}Z`).getTime(), volumeUsd: toPlain(v.toDecimalPlaces(2)), feesUsd: '0' })),
+      volumeSeries: hours.map((h) => ({
+        t: new Date(`${h.replace(' ', 'T')}Z`).getTime(),
+        volumeUsd: toPlain((byHour.get(h) ?? ZERO).toDecimalPlaces(2)),
+        feesUsd: toPlain((feesByHour.get(h) ?? ZERO).toDecimalPlaces(2)),
+      })),
     };
   }
 
@@ -269,6 +283,9 @@ export class AdminService {
     maxLeverage: number;
     defaultLeverage: number;
     fundingIntervalHours: number;
+    priceBand?: string;
+    makerFeeRate?: string | null;
+    takerFeeRate?: string | null;
     status: string;
   }): Promise<string> {
     const u = this.core.assets.require(input.underlying);
@@ -277,9 +294,24 @@ export class AdminService {
     if (this.core.markets.bySymbol(symbol)) throw new AppError('CONFLICT', `${symbol} already exists`);
     await this.core.db.transaction(async (tx) => {
       const res = await tx.execute(
-        `INSERT INTO markets (symbol, type, display_name, base_asset_id, quote_asset_id, status, tick_size, step_size, min_qty, max_qty, min_notional, sort_order)
-         VALUES (?, 'FUTURES', ?, ?, ?, ?, ?, ?, ?, ?, ?, 200)`,
-        [symbol, `${u.symbol}${s.symbol} Perpetual`, u.id, s.id, input.status, input.tickSize, input.stepSize, input.minQty, input.maxQty, input.minNotional],
+        `INSERT INTO markets (symbol, type, display_name, base_asset_id, quote_asset_id, status, tick_size, step_size, min_qty, max_qty, min_notional,
+           price_band, maker_fee_rate, taker_fee_rate, sort_order)
+         VALUES (?, 'FUTURES', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 200)`,
+        [
+          symbol,
+          `${u.symbol}${s.symbol} Perpetual`,
+          u.id,
+          s.id,
+          input.status,
+          input.tickSize,
+          input.stepSize,
+          input.minQty,
+          input.maxQty,
+          input.minNotional,
+          input.priceBand ?? '0.05',
+          input.makerFeeRate ?? null,
+          input.takerFeeRate ?? null,
+        ],
       );
       await tx.execute(
         `INSERT INTO futures_contracts (market_id, underlying_asset_id, settle_asset_id, max_leverage, default_leverage, funding_interval_hours)
@@ -289,7 +321,7 @@ export class AdminService {
       await tx.execute(
         `INSERT INTO futures_risk_tiers (market_id, tier, max_notional, max_leverage, maintenance_margin_rate, maintenance_amount)
          VALUES (?, 1, 100000000, ?, ?, 0)`,
-        [res.insertId, input.maxLeverage, (1 / input.maxLeverage / 2).toFixed(6)],
+        [res.insertId, input.maxLeverage, D(1).div(input.maxLeverage).div(2).toFixed(6)],
       );
     });
     await this.core.markets.load();
@@ -452,7 +484,7 @@ export class AdminService {
       params.push(new Date(q.to));
     }
     const total = await this.core.db.one<{ c: number }>(`SELECT COUNT(*) AS c FROM orders o JOIN users u ON u.id = o.user_id WHERE ${where.join(' AND ')}`, params);
-    const rows = await this.core.db.query<import('./orders').OrderRow & { email: string }>(
+    const rows = await this.core.db.query<OrderRow & { email: string }>(
       `SELECT o.*, u.email FROM orders o JOIN users u ON u.id = o.user_id WHERE ${where.join(' AND ')} ORDER BY o.id DESC LIMIT ? OFFSET ?`,
       [...params, q.pageSize, (q.page - 1) * q.pageSize],
     );
@@ -527,12 +559,11 @@ export class AdminService {
       params.push(q.q, q.q, `%${q.q}%`);
     }
     const total = await this.core.db.one<{ c: number }>(`SELECT COUNT(*) AS c FROM deposits d JOIN users u ON u.id = d.user_id WHERE ${where.join(' AND ')}`, params);
-    const rows = await this.core.db.query<{ id: string; email: string }>(
-      `SELECT d.id, u.email FROM deposits d JOIN users u ON u.id = d.user_id WHERE ${where.join(' AND ')} ORDER BY d.id DESC LIMIT ? OFFSET ?`,
+    const rows = await this.core.db.query<Record<string, unknown> & { user_email: string; user_id: string }>(
+      `SELECT d.*, u.email AS user_email FROM deposits d JOIN users u ON u.id = d.user_id WHERE ${where.join(' AND ')} ORDER BY d.id DESC LIMIT ? OFFSET ?`,
       [...params, q.pageSize, (q.page - 1) * q.pageSize],
     );
-    const items = [];
-    for (const r of rows) items.push({ ...(await this.core.walletOps.depositById(String(r.id)))!, userEmail: r.email });
+    const items = rows.map((r) => ({ ...this.core.walletOps.depositDto(r), userId: String(r.user_id), userEmail: r.user_email }));
     return pageOf(items, Number(total?.c ?? 0), q.page, q.pageSize);
   }
 
@@ -552,21 +583,18 @@ export class AdminService {
       params.push(q.userId);
     }
     const total = await this.core.db.one<{ c: number }>(`SELECT COUNT(*) AS c FROM withdrawals w WHERE ${where.join(' AND ')}`, params);
-    const rows = await this.core.db.query<{ id: string; email: string; user_id: string; risk_score: number; amount_usd: string }>(
-      `SELECT w.id, w.user_id, w.risk_score, w.amount_usd, u.email FROM withdrawals w JOIN users u ON u.id = w.user_id
+    const rows = await this.core.db.query<WithdrawalRow & { user_email: string; user_id: string; risk_score: number; amount_usd: string }>(
+      `SELECT w.*, u.email AS user_email FROM withdrawals w JOIN users u ON u.id = w.user_id
         WHERE ${where.join(' AND ')} ORDER BY w.id DESC LIMIT ? OFFSET ?`,
       [...params, q.pageSize, (q.page - 1) * q.pageSize],
     );
-    const items = [];
-    for (const r of rows) {
-      items.push({
-        ...(await this.core.walletOps.withdrawalById(String(r.id)))!,
-        userId: String(r.user_id),
-        userEmail: r.email,
-        riskScore: Number(r.risk_score),
-        amountUsd: toPlain(String(r.amount_usd)),
-      });
-    }
+    const items = rows.map((r) => ({
+      ...this.core.walletOps.withdrawalDto(r),
+      userId: String(r.user_id),
+      userEmail: r.user_email,
+      riskScore: Number(r.risk_score),
+      amountUsd: toPlain(String(r.amount_usd)),
+    }));
     return pageOf(items, Number(total?.c ?? 0), q.page, q.pageSize);
   }
 
@@ -583,11 +611,13 @@ export class AdminService {
     const fmt = q.groupBy === 'month' ? '%Y-%m' : q.groupBy === 'week' ? '%x-W%v' : '%Y-%m-%d';
     const from = new Date(q.from ?? Date.now() - 30 * 86_400_000);
     const to = new Date(q.to ?? Date.now());
-    const trading = await this.core.db.query<{ period: string; market_type: MarketType; fee_asset_id: number; fees: string; trades: number; volume: string }>(
-      `SELECT DATE_FORMAT(f.created_at, '${fmt}') AS period, f.market_type, f.fee_asset_id, SUM(f.fee) AS fees, COUNT(*) AS trades, SUM(f.quote_quantity) AS volume
-         FROM order_fills f JOIN users u ON u.id = f.user_id
+    // Grouped by fee asset *and* quote asset so fees and volume are each in a single unit.
+    const trading = await this.core.db.query<{ period: string; market_type: MarketType; fee_asset_id: number; quote_asset_id: number; fees: string; trades: number; volume: string }>(
+      `SELECT DATE_FORMAT(f.created_at, '${fmt}') AS period, f.market_type, f.fee_asset_id, m.quote_asset_id,
+              SUM(f.fee) AS fees, COUNT(*) AS trades, SUM(f.quote_quantity) AS volume
+         FROM order_fills f JOIN users u ON u.id = f.user_id JOIN markets m ON m.id = f.market_id
         WHERE u.is_system = 0 AND f.created_at BETWEEN ? AND ?
-        GROUP BY period, f.market_type, f.fee_asset_id ORDER BY period DESC`,
+        GROUP BY period, f.market_type, f.fee_asset_id, m.quote_asset_id ORDER BY period DESC`,
       [from, to],
     );
     const withdrawals = await this.core.db.query<{ period: string; asset_id: number; fees: string; n: number; volume: string }>(
@@ -603,6 +633,7 @@ export class AdminService {
         fees: toPlain(r.fees),
         trades: Number(r.trades),
         volume: toPlain(r.volume),
+        volumeAsset: this.core.assets.symbolOf(Number(r.quote_asset_id)),
       })),
       ...withdrawals.map((r) => ({
         period: r.period,
@@ -611,6 +642,7 @@ export class AdminService {
         fees: toPlain(r.fees),
         trades: Number(r.n),
         volume: toPlain(r.volume),
+        volumeAsset: this.core.assets.symbolOf(Number(r.asset_id)),
       })),
     ];
   }
@@ -796,7 +828,14 @@ export class AdminService {
 
   async systemHealth(): Promise<SystemHealthDto> {
     const redis = this.core.redis.main;
-    const keys = await redis.keys(key('hb', '*'));
+    // SCAN (not KEYS) so the health page never blocks Redis.
+    const keys: string[] = [];
+    let cursor = '0';
+    do {
+      const [next, batch] = await redis.scan(cursor, 'MATCH', key('hb', '*'), 'COUNT', 200);
+      cursor = next;
+      keys.push(...batch);
+    } while (cursor !== '0' && keys.length < 1000);
     const beats = keys.length ? await redis.mget(keys) : [];
     const services: ServiceHealthDto[] = [];
     let wsConnections = 0;

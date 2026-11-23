@@ -75,6 +75,7 @@ export async function api(
   method: 'GET' | 'POST' | 'PUT' | 'PATCH' | 'DELETE',
   url: string,
   opts: { token?: string; body?: unknown; headers?: Record<string, string> } = {},
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any -- untyped JSON bodies keep assertions terse
 ): Promise<LightMyRequestResponse & { body: string; json: <T = any>() => T }> {
   const res = await h.app.inject({
     method,

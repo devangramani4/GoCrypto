@@ -349,7 +349,7 @@ export class LiquidationEngine {
           r.id = res.insertId;
         } catch (e) {
           if (isDuplicateKeyError(e, 'uq_liquidation_version')) {
-            throw new Error(`position ${r.positionId} version ${r.positionVersion} already liquidated`);
+            throw new Error(`position ${r.positionId} version ${r.positionVersion} already liquidated`, { cause: e });
           }
           throw e;
         }

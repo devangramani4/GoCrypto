@@ -16,7 +16,7 @@ export const symbolSchema = z
   .trim()
   .min(3)
   .max(40)
-  .regex(/^[A-Z0-9][A-Z0-9\-]*$/, 'Invalid symbol');
+  .regex(/^[A-Z0-9][A-Z0-9-]*$/, 'Invalid symbol');
 
 export const assetSymbol = z
   .string()
@@ -73,12 +73,12 @@ export const marketTypeSchema = z.enum(MARKET_TYPES);
 export const clientOrderId = z
   .string()
   .trim()
-  .regex(/^[A-Za-z0-9_\-]{1,36}$/, 'clientOrderId must be 1-36 chars of [A-Za-z0-9_-]');
+  .regex(/^[A-Za-z0-9_-]{1,36}$/, 'clientOrderId must be 1-36 chars of [A-Za-z0-9_-]');
 
 export const idempotencyKey = z
   .string()
   .trim()
-  .regex(/^[A-Za-z0-9_\-]{8,64}$/, 'Invalid idempotency key');
+  .regex(/^[A-Za-z0-9_-]{8,64}$/, 'Invalid idempotency key');
 
 export const cursorQuery = z.object({
   cursor: z.string().regex(/^\d+$/).optional(),

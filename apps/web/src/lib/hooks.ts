@@ -259,3 +259,13 @@ export function useMarketMap(type?: MarketType): Map<string, MarketDto> {
 export function useSystemStatus() {
   return useQuery({ queryKey: ['system-status'], queryFn: () => api.system.status(), staleTime: 5 * 60_000, retry: 1 });
 }
+
+/** Wall clock that re-renders every `intervalMs` (keeps components pure: no Date.now() during render). */
+export function useNow(intervalMs = 1000): number {
+  const [now, setNow] = useState(() => Date.now());
+  useEffect(() => {
+    const t = setInterval(() => setNow(Date.now()), intervalMs);
+    return () => clearInterval(t);
+  }, [intervalMs]);
+  return now;
+}

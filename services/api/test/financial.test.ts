@@ -214,3 +214,22 @@ describe('deposits', () => {
     expect(again).toBeNull();
   });
 });
+
+describe('balance queries', () => {
+  it('honours includeZero=false (query booleans are parsed, not coerced)', async () => {
+    // BTC is credited then fully debited, leaving an existing wallet row with a zero balance.
+    const u = await createUser(h, [
+      ['SPOT', 'USDT', '100'],
+      ['SPOT', 'BTC', '1'],
+      ['SPOT', 'BTC', '-1'],
+    ]);
+    const hidden = await api(h, 'GET', '/api/v1/wallet/balances?account=SPOT&includeZero=false', { token: u.token });
+    expect(hidden.statusCode).toBe(200);
+    const assets = hidden.json<{ asset: string; total: string }[]>();
+    expect(assets.every((b) => D(b.total).gt(0))).toBe(true);
+    expect(assets.map((b) => b.asset)).toContain('USDT');
+    expect(assets.map((b) => b.asset)).not.toContain('BTC');
+    const all = await api(h, 'GET', '/api/v1/wallet/balances?account=SPOT&includeZero=true', { token: u.token });
+    expect(all.json<{ asset: string }[]>().map((b) => b.asset)).toContain('BTC');
+  });
+});

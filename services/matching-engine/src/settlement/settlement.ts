@@ -7,6 +7,7 @@ import {
   type PositionState,
   type TradeStreamEntry,
   type Tx,
+  type WalletRow,
   applyFuturesFill,
   applyOptionFill,
   positionKey,
@@ -450,7 +451,7 @@ export class Settlement {
   private async coverDeficits(
     tx: Tx,
     sim: BalanceSim,
-    wallets: Map<string, import('@gocrypto/server-core').WalletRow>,
+    wallets: Map<string, WalletRow>,
     users: string[],
     assetId: number,
     account: 'FUTURES' | 'OPTIONS',

@@ -14,7 +14,6 @@ export const Decimal = DecimalJS.clone({
   toExpNeg: -60,
   toExpPos: 60,
 });
-// eslint-disable-next-line @typescript-eslint/no-redeclare
 export type Decimal = DecimalJS;
 export type DecimalLike = DecimalJS.Value;
 

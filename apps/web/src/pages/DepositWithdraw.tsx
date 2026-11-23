@@ -9,7 +9,7 @@ import { AssetIcon, CopyButton, QrCode } from '../components/common';
 import { DecimalInput } from '../components/trading/controls';
 import { api, errorMessage } from '../lib/api';
 import { formatNumber, isPositive } from '../lib/format';
-import { useAssets, useAuthed, useSystemStatus } from '../lib/hooks';
+import { useAssets, useAuthed, useNow, useSystemStatus } from '../lib/hooks';
 import { useSession } from '../stores/session';
 import { DepositHistory, WithdrawalHistory } from './WalletPage';
 
@@ -268,7 +268,8 @@ export function WithdrawPage() {
   const l = limits.data;
   const decimals = net?.withdrawalPrecision ?? 8;
   const receive = isPositive(amount) && l ? D(amount).minus(l.fee) : null;
-  const lockUntil = security.data?.withdrawalLockUntil && security.data.withdrawalLockUntil > Date.now() ? security.data.withdrawalLockUntil : null;
+  const now = useNow(30_000);
+  const lockUntil = security.data?.withdrawalLockUntil && security.data.withdrawalLockUntil > now ? security.data.withdrawalLockUntil : null;
   const blocked = !user?.withdrawalsEnabled ? 'Withdrawals are disabled for this account. Contact support.' : !user?.emailVerified ? 'Verify your email address before withdrawing.' : lockUntil ? `Withdrawals are temporarily locked after a security change until ${new Date(lockUntil).toLocaleString()}.` : null;
 
   const validate = (): string | null => {
@@ -456,7 +457,8 @@ function WithdrawVerifyModal({
     onError: (e) => setError(errorMessage(e)),
   });
   const ready = (!requires.pin || /^\d{6}$/.test(pin)) && (!requires.totp || /^\d{6}$/.test(totp)) && (!requires.emailCode || /^\d{6}$/.test(emailCode));
-  const cooldown = sent && Date.now() - sent < 60_000;
+  const now = useNow(1000);
+  const cooldown = sent > 0 && now - sent < 60_000;
   return (
     <Modal
       open

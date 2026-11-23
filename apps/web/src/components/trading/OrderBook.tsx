@@ -21,6 +21,13 @@ function group(levels: PriceLevel[], step: string | null, side: 'bid' | 'ask'): 
   return [...out.entries()].map(([p, q]) => [p, q.toFixed()] as PriceLevel);
 }
 
+/** Running totals of a price ladder (best price first). */
+function cumulative(levels: PriceLevel[]): { p: string; q: string; total: ReturnType<typeof D> }[] {
+  const out: { p: string; q: string; total: ReturnType<typeof D> }[] = [];
+  for (const [p, q] of levels) out.push({ p, q, total: (out[out.length - 1]?.total ?? D(0)).plus(q) });
+  return out;
+}
+
 const Row = memo(function Row({
   price,
   qty,
@@ -61,16 +68,8 @@ export function OrderBook({ market, onPriceClick, rows = 16 }: { market: MarketD
     const isBase = step === steps[0];
     const a = group(book?.asks ?? [], isBase ? null : step, 'ask').slice(0, view === 'asks' ? rows * 2 : rows);
     const b = group(book?.bids ?? [], isBase ? null : step, 'bid').slice(0, view === 'bids' ? rows * 2 : rows);
-    let acc = D(0);
-    const asksCum = a.map(([p, q]) => {
-      acc = acc.plus(q);
-      return { p, q, total: acc };
-    });
-    acc = D(0);
-    const bidsCum = b.map(([p, q]) => {
-      acc = acc.plus(q);
-      return { p, q, total: acc };
-    });
+    const asksCum = cumulative(a);
+    const bidsCum = cumulative(b);
     const max = Math.max(Number(asksCum[asksCum.length - 1]?.total ?? 0), Number(bidsCum[bidsCum.length - 1]?.total ?? 0), 1e-12);
     const bestAsk = a[0]?.[0];
     const bestBid = b[0]?.[0];

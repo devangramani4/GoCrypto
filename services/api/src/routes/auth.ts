@@ -191,6 +191,11 @@ export async function authRoutes(app: FastifyInstance, { core }: ApiDeps): Promi
     return { ok: true };
   });
 
+  r.delete('/devices/push-token', { preHandler: authenticated }, async (req) => {
+    await core.auth.unregisterPushToken(requireSession(req).userId, requestContext(req));
+    return { ok: true };
+  });
+
   r.get(
     '/login-history',
     { schema: { querystring: z.object({ cursor: z.string().regex(/^\d+$/).optional(), limit: z.coerce.number().int().min(1).max(100).default(50) }) }, preHandler: authenticated },

@@ -186,8 +186,12 @@ export class HttpClient {
 }
 
 /** RFC 4122 v4-ish id for idempotency keys and client order ids (works without crypto.randomUUID). */
+/** Unique id for idempotency keys / client order ids (uniqueness matters, not secrecy). */
 export function randomId(prefix = ''): string {
   const c = globalThis.crypto as Crypto | undefined;
-  const raw = c?.randomUUID ? c.randomUUID().replace(/-/g, '') : Array.from({ length: 32 }, () => Math.floor(Math.random() * 16).toString(16)).join('');
+  let raw: string;
+  if (c?.randomUUID) raw = c.randomUUID().replace(/-/g, '');
+  else if (c?.getRandomValues) raw = Array.from(c.getRandomValues(new Uint8Array(16)), (b) => b.toString(16).padStart(2, '0')).join('');
+  else raw = `${Date.now().toString(16)}${Array.from({ length: 20 }, () => Math.floor(Math.random() * 16).toString(16)).join('')}`;
   return `${prefix}${raw}`.slice(0, 36);
 }

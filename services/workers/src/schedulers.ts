@@ -1,4 +1,4 @@
-import { type Core, type EngineGateway, FundingService, OptionsLifecycleService, key } from '@gocrypto/server-core';
+import { type Core, type EngineGateway, OptionsLifecycleService, key } from '@gocrypto/server-core';
 import { D } from '@gocrypto/trading-utils';
 
 /**
