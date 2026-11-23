@@ -82,7 +82,7 @@ export const updateDeviceSchema = z.object({
 
 export const pushTokenSchema = z.object({
   token: z.string().trim().min(10).max(512),
-  provider: z.enum(['EXPO', 'FCM', 'APNS', 'WEB']),
+  provider: z.enum(['FCM', 'APNS', 'WEB']),
 });
 
 export const updateProfileSchema = z.object({

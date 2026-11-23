@@ -1,11 +1,13 @@
 import nodemailer, { type Transporter } from 'nodemailer';
-import { loadConfig } from '../config';
+import { type AppConfig, loadConfig } from '../config';
 import { getLogger } from '../logger';
+import { FcmClient, parseServiceAccount } from './fcm';
 import type { EmailJob } from '../queues';
 
 const TEMPLATES: Record<string, { subject?: string; html: (v: Record<string, string | number | null>) => string }> = {
   verify_email: {
-    html: (v) => `<p>Your GoCrypto email verification code is:</p><h2 style="letter-spacing:4px">${v.code}</h2><p>The code expires in 15 minutes.</p>`,
+    html: (v) =>
+      `<p>Your GoCrypto email verification code is:</p><h2 style="letter-spacing:4px">${v.code}</h2><p>The code expires in 15 minutes.</p>`,
   },
   password_reset: {
     html: (v) =>
@@ -67,7 +69,10 @@ export class EmailChannel {
   async send(job: EmailJob): Promise<void> {
     const html = render(job);
     if (this.mode === 'log' || !this.transporter) {
-      getLogger().info({ to: job.to, subject: job.subject, template: job.template }, '[email:log] message suppressed (EMAIL_CONFIG=log)');
+      getLogger().info(
+        { to: job.to, subject: job.subject, template: job.template },
+        '[email:log] message suppressed (EMAIL_CONFIG=log)',
+      );
       return;
     }
     await this.transporter.sendMail({ from: loadConfig().EMAIL_FROM, to: job.to, subject: job.subject, html });
@@ -92,23 +97,63 @@ export class SmsChannel {
   }
 }
 
+export interface PushResult {
+  /** Devices FCM accepted the notification for. */
+  sent: number;
+  /** Tokens FCM reported as no longer valid — the caller should stop sending to them. */
+  invalidTokens: string[];
+  /** Deliveries that failed because FCM was unavailable or rate limited. */
+  retryable: number;
+}
+
+/**
+ * Push notifications through Firebase Cloud Messaging (Android, and iOS via APNs). PUSH_PROVIDER=log
+ * only logs (development). Tokens registered with other providers are not deliverable and skipped.
+ */
 export class PushChannel {
-  async send(tokens: { token: string; provider: string | null }[], title: string, body: string, data?: Record<string, unknown>): Promise<void> {
-    const cfg = loadConfig();
-    if (cfg.PUSH_PROVIDER === 'log' || tokens.length === 0) {
+  private fcm: FcmClient | null = null;
+
+  constructor(
+    private readonly cfg: Pick<AppConfig, 'PUSH_PROVIDER' | 'FCM_SERVICE_ACCOUNT'> = loadConfig(),
+    private readonly fetchImpl?: typeof fetch,
+  ) {}
+
+  async send(
+    tokens: { token: string; provider: string | null }[],
+    title: string,
+    body: string,
+    data?: Record<string, unknown>,
+  ): Promise<PushResult> {
+    if (this.cfg.PUSH_PROVIDER === 'log' || tokens.length === 0) {
       getLogger().info({ devices: tokens.length, title }, '[push:log] notification suppressed (PUSH_PROVIDER=log)');
-      return;
+      return { sent: 0, invalidTokens: [], retryable: 0 };
     }
-    const expo = tokens.filter((t) => t.provider === 'EXPO' || t.token.startsWith('ExponentPushToken'));
-    if (expo.length === 0) return;
-    const res = await fetch('https://exp.host/--/api/v2/push/send', {
-      method: 'POST',
-      headers: {
-        'content-type': 'application/json',
-        ...(cfg.EXPO_ACCESS_TOKEN ? { authorization: `Bearer ${cfg.EXPO_ACCESS_TOKEN}` } : {}),
-      },
-      body: JSON.stringify(expo.map((t) => ({ to: t.token, title, body, data, sound: 'default' }))),
-    });
-    if (!res.ok) throw new Error(`Expo push responded ${res.status}`);
+    const fcmTokens = tokens.filter((t) => t.provider === 'FCM').map((t) => t.token);
+    if (fcmTokens.length < tokens.length) {
+      getLogger().debug({ skipped: tokens.length - fcmTokens.length }, 'push tokens from other providers skipped');
+    }
+    if (fcmTokens.length === 0) return { sent: 0, invalidTokens: [], retryable: 0 };
+    this.fcm ??= new FcmClient(parseServiceAccount(this.cfg.FCM_SERVICE_ACCOUNT), this.fetchImpl);
+    const fcm = this.fcm;
+    const outcomes = await Promise.all(
+      fcmTokens.map(async (token) => [token, await fcm.send(token, { title, body, data })] as const),
+    );
+    const result: PushResult = {
+      sent: outcomes.filter(([, o]) => o === 'sent').length,
+      invalidTokens: outcomes.filter(([, o]) => o === 'invalid-token').map(([t]) => t),
+      retryable: outcomes.filter(([, o]) => o === 'retryable').length,
+    };
+    if (result.sent < fcmTokens.length) {
+      getLogger().warn(
+        {
+          devices: fcmTokens.length,
+          sent: result.sent,
+          invalid: result.invalidTokens.length,
+          retryable: result.retryable,
+        },
+        'some push notifications were not delivered',
+      );
+    }
+    return result;
   }
 }

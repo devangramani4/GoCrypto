@@ -41,7 +41,23 @@ export function startJobWorkers(core: Core): Worker[] {
           'SELECT push_token, push_provider FROM user_devices WHERE user_id = ? AND push_token IS NOT NULL AND revoked_at IS NULL',
           [data.userId],
         );
-        await push.send(tokens.map((t) => ({ token: t.push_token, provider: t.push_provider })), data.title, data.body, data.data);
+        const result = await push.send(
+          tokens.map((t) => ({ token: t.push_token, provider: t.push_provider })),
+          data.title,
+          data.body,
+          data.data,
+        );
+        if (result.invalidTokens.length) {
+          // App uninstalled or token rotated: stop sending to it (the app registers its new token itself).
+          await core.db.execute(
+            `UPDATE user_devices SET push_token = NULL, push_provider = NULL
+              WHERE user_id = ? AND push_token IN (${result.invalidTokens.map(() => '?').join(', ')})`,
+            [data.userId, ...result.invalidTokens],
+          );
+        }
+        // Retry (with backoff) only when FCM was unavailable for every device, so devices that already
+        // received the notification never get it twice.
+        if (result.sent === 0 && result.retryable > 0) throw new Error('FCM unavailable; push will be retried');
       }
     }),
     { connection, prefix: BULL_PREFIX, concurrency: 10 },
@@ -54,8 +70,18 @@ export function startJobWorkers(core: Core): Worker[] {
       const res = await core.walletOps.confirmDeposit(depositId);
       if (res.status === 'CONFIRMING') {
         // Sandbox chain simulation: one confirmation every ~2 seconds.
-        const n = Number(String(job.id ?? '').split('-').pop() ?? 1) + 1;
-        await core.queues.add(QUEUE_NAMES.deposits, 'confirm', { depositId }, { delay: 2000, jobId: `dep-${depositId}-${n}` });
+        const n =
+          Number(
+            String(job.id ?? '')
+              .split('-')
+              .pop() ?? 1,
+          ) + 1;
+        await core.queues.add(
+          QUEUE_NAMES.deposits,
+          'confirm',
+          { depositId },
+          { delay: 2000, jobId: `dep-${depositId}-${n}` },
+        );
       }
     }),
     { connection, prefix: BULL_PREFIX, concurrency: 5 },

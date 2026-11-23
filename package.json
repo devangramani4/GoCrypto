@@ -19,7 +19,7 @@
     "format": "prettier --write .",
     "format:check": "prettier --check .",
     "test": "pnpm -r --workspace-concurrency=1 test",
-    "test:unit": "pnpm --filter @gocrypto/trading-utils --filter @gocrypto/matching-engine --filter @gocrypto/risk-engine --filter @gocrypto/validation test",
+    "test:unit": "pnpm --filter @gocrypto/trading-utils --filter @gocrypto/matching-engine --filter @gocrypto/risk-engine --filter @gocrypto/validation --filter @gocrypto/server-core test",
     "test:integration": "pnpm --filter @gocrypto/api test",
     "db:migrate": "pnpm --filter @gocrypto/database migrate",
     "db:rollback": "pnpm --filter @gocrypto/database rollback",

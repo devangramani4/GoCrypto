@@ -165,7 +165,7 @@ export class GoCryptoClient {
     updateDevice: (id: string, body: { name?: string; trusted?: boolean }) =>
       this.patch<{ ok: true }>(`/api/v1/auth/devices/${id}`, body),
     removeDevice: (id: string) => this.del<void>(`/api/v1/auth/devices/${id}`),
-    registerPushToken: (token: string, provider: 'EXPO' | 'FCM' | 'APNS' | 'WEB') =>
+    registerPushToken: (token: string, provider: 'FCM' | 'APNS' | 'WEB') =>
       this.post<{ ok: true }>('/api/v1/auth/devices/push-token', { token, provider }),
     unregisterPushToken: () => this.del<{ ok: true }>('/api/v1/auth/devices/push-token'),
     loginHistory: (cursor?: string) => this.get<CursorPage<LoginHistoryDto>>('/api/v1/auth/login-history', { cursor }),

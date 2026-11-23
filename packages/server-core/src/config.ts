@@ -1,6 +1,7 @@
 import { existsSync } from 'node:fs';
 import path from 'node:path';
 import { z } from 'zod';
+import { parseServiceAccount } from './notifications/fcm';
 
 /** Load the nearest .env (repo root) once; never overrides variables already set; skipped in tests. */
 function loadDotEnv(env: NodeJS.ProcessEnv): void {
@@ -114,9 +115,13 @@ const envSchema = z.object({
   EMAIL_FROM: z.string().default('GoCrypto <no-reply@gocrypto.local>'),
   /** "log" or a JSON object for the SMS provider. */
   SMS_CONFIG: z.string().default('log'),
-  /** "log" | "expo" (uses Expo push service) */
-  PUSH_PROVIDER: z.enum(['log', 'expo']).default('log'),
-  EXPO_ACCESS_TOKEN: z.string().default(''),
+  /** "log" (development: pushes are only logged) or "fcm" (Firebase Cloud Messaging: Android, and iOS via APNs). */
+  PUSH_PROVIDER: z.enum(['log', 'fcm']).default('log'),
+  /**
+   * Firebase service-account key (JSON or base64-encoded JSON) allowed to send FCM messages. A secret:
+   * supply it from the secret manager, never from the repository.
+   */
+  FCM_SERVICE_ACCOUNT: z.string().default(''),
 
   MARKET_DATA_MODE: z.enum(['SIMULATED', 'EXTERNAL']).default('SIMULATED'),
   MARKET_DATA_URL: z.string().default('wss://stream.binance.com:9443/stream'),
@@ -179,6 +184,8 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env, opts: { reload?
     if (insecure.length)
       throw new Error(`Refusing to start in production with insecure secrets: ${insecure.join(', ')}`);
   }
+  // Fail fast on unusable push credentials instead of dropping every notification later.
+  if (c.PUSH_PROVIDER === 'fcm') parseServiceAccount(c.FCM_SERVICE_ACCOUNT);
   if (c.TRADING_MODE === 'LIVE' && c.LIVE_TRADING_ACKNOWLEDGEMENT !== 'REGULATORY_REVIEW_COMPLETED') {
     throw new Error(
       'TRADING_MODE=LIVE requires LIVE_TRADING_ACKNOWLEDGEMENT=REGULATORY_REVIEW_COMPLETED. Custody, exchange, ' +
