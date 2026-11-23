@@ -61,6 +61,15 @@ socket.on('event', (env) => {
 
 - Order book messages are full snapshots of the top levels (coalesced per publish interval), so a client
   never needs to replay deltas; use REST `GET /markets/{symbol}/orderbook` for the initial state.
+- `trades` messages carry every execution of the market since the previous message, oldest first (one
+  message per market per publish interval, 100 ms by default).
+- When a gateway node is behind, it sends the **latest** order book / ticker / mark snapshot instead of every
+  intermediate one, merges pending trade batches (keeping the latest 200 trades) and `tickers` deltas. Private
+  events (`order`, `fill`, `balance`, `position`, `notification`) and candles are never dropped or merged.
+- A node that is full or saturated refuses new connections (the handshake fails with HTTP 403 `server busy`);
+  clients should reconnect with randomized exponential backoff — the reference client and `socket.io-client`
+  defaults do — and the load balancer routes them to another node. Clients that stop reading (more than
+  `WS_SLOW_CONSUMER_BYTES`, 8 MiB by default, queued) are disconnected and resync on reconnect.
 - Events are delivered at-most-once per connection; after a reconnect, refetch REST state (the reference
   client re-subscribes automatically, and the web app invalidates its caches).
 - Each socket may hold at most 200 channel subscriptions and perform 20 subscribe/unsubscribe operations

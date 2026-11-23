@@ -43,7 +43,10 @@ module.exports = {
       ...common,
       name: 'gc-websocket',
       script: 'services/websocket/dist/main.js',
+      // One gateway process per core: fan-out is bound by per-socket writes on a single event loop.
+      // Cluster mode shares the port (connections are spread across workers; no stickiness needed).
       instances: Number(process.env.WS_INSTANCES || 1),
+      exec_mode: 'cluster',
     },
     {
       ...common,

@@ -25,6 +25,8 @@ Configuration is environment-only (12-factor). `.env.example` documents every va
 | `CORS_ORIGINS`, `WEB_APP_URL`, `ADMIN_APP_URL`, `DESKTOP_APP_ORIGIN` | Allowed browser origins                                                                              |
 | `TRUST_PROXY`                                                        | `true` behind Nginx/LB so rate limits and audit logs see the client IP                               |
 | `ENGINE_MODE`                                                        | `redis` (dedicated matching-engine service) or `inprocess` (single node)                             |
+| `ENGINE_SHARDS`, `ENGINE_SHARD`, `ENGINE_SHARD_PINS`                 | Matching-engine sharding by market (same shards/pins everywhere; `ENGINE_SHARD` per engine instance) |
+| `WS_MAX_CONNECTIONS`, `WS_SHED_CPU`, `WS_SHED_LOOP_DELAY_MS`         | Gateway admission control (refuse new connections when full / saturated)                             |
 | `METRICS_TOKEN`                                                      | Bearer token for `/metrics` (keep metrics on the private network either way)                         |
 
 ## Local development
@@ -72,12 +74,13 @@ the same configuration as the compose edge proxy.
 
 ## Scaling and availability
 
-| Component                                 | Strategy                                                                                                                                                                          |
-| ----------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| api, websocket, workers                   | Stateless — run N replicas behind the proxy. WebSocket uses the websocket transport only (no sticky sessions); fan-out goes through Redis.                                        |
-| matching-engine, risk-engine, market-data | Redis leader election: run 2 instances, one active, one hot standby that takes over when the leader's lease expires. The engine rebuilds its books from the database on takeover. |
-| MariaDB                                   | Primary with semi-sync replica; `READ-COMMITTED`, binlog `ROW`, `innodb_flush_log_at_trx_commit=1`, `sync_binlog=1`. Point-in-time recovery from binlogs + nightly `mariabackup`. |
-| Redis                                     | Persistence (AOF `everysec`), `noeviction`; Sentinel or a managed service for failover. Redis holds no money state — the database is the source of truth.                         |
+| Component                | Strategy                                                                                                                                                                                                                                                                                                                     |
+| ------------------------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| api, websocket, workers  | Stateless — run N replicas behind the proxy. WebSocket uses the websocket transport only (no sticky sessions); fan-out goes through Redis. Run one gateway process per core (PM2 cluster mode / one container per vCPU) and use `/ready` (503 while full or saturated) as the readiness probe and `/health` as liveness.     |
+| matching-engine          | Sharded by market: `ENGINE_SHARDS=N`, one deployment per shard with its own `ENGINE_SHARD` (and `METRICS_PORT` when shards share a host), each with a hot standby (Redis leader election per shard). Pin the busiest books to dedicated shards with `ENGINE_SHARD_PINS`. Drain the engines before changing the shard layout. |
+| risk-engine, market-data | Redis leader election: run 2 instances, one active, one hot standby that takes over when the leader's lease expires. The engine rebuilds its books from the database on takeover.                                                                                                                                            |
+| MariaDB                  | Primary with semi-sync replica; `READ-COMMITTED`, binlog `ROW`, `innodb_flush_log_at_trx_commit=1`, `sync_binlog=1`. Point-in-time recovery from binlogs + nightly `mariabackup`.                                                                                                                                            |
+| Redis                    | Persistence (AOF `everysec`), `noeviction`; Sentinel or a managed service for failover. Redis holds no money state — the database is the source of truth.                                                                                                                                                                    |
 
 ## Migrations
 
