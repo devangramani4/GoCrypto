@@ -1,0 +1,259 @@
+# GoCrypto full stack.
+#   cp .env.example .env   # then set real secrets (JWT_*, ENCRYPTION_KEY, DB_PASSWORD, …)
+#   docker compose up -d --build                       # core stack on http://localhost:8080 (admin :8081)
+#   docker compose --profile monitoring up -d          # + Prometheus (:9090) and Grafana (:3000)
+# Services run with NODE_ENV=production, so the backend refuses to start with the development secrets.
+name: gocrypto
+
+x-backend: &backend
+  image: gocrypto/backend:${GOCRYPTO_VERSION:-local}
+  build:
+    context: .
+    dockerfile: infrastructure/docker/backend.Dockerfile
+  env_file: .env
+  environment: &backend-env
+    NODE_ENV: production
+    APP_ENV: ${APP_ENV:-staging}
+    DATABASE_URL: mysql://${DB_USER:-gocrypto}:${DB_PASSWORD:?set DB_PASSWORD in .env}@mariadb:3306/${DB_NAME:-gocrypto}
+    REDIS_URL: redis://redis:6379/0
+    ENGINE_MODE: redis
+    API_HOST: 0.0.0.0
+    TRUST_PROXY: 'true'
+    LOG_PRETTY: 'false'
+    WEB_APP_URL: ${PUBLIC_WEB_URL:-http://localhost:8080}
+    ADMIN_APP_URL: ${PUBLIC_ADMIN_URL:-http://localhost:8081}
+    CORS_ORIGINS: ${PUBLIC_WEB_URL:-http://localhost:8080},${PUBLIC_ADMIN_URL:-http://localhost:8081}
+  restart: unless-stopped
+  init: true
+  read_only: true
+  tmpfs: [/tmp]
+  security_opt: [no-new-privileges:true]
+  cap_drop: [ALL]
+  networks: [backend]
+  logging:
+    driver: json-file
+    options: { max-size: 20m, max-file: '5' }
+  depends_on: &backend-deps
+    migrate: { condition: service_completed_successfully }
+    redis: { condition: service_healthy }
+
+x-node-health: &node-health
+  interval: 15s
+  timeout: 5s
+  retries: 5
+  start_period: 30s
+
+services:
+  mariadb:
+    image: mariadb:10.11
+    restart: unless-stopped
+    environment:
+      MARIADB_DATABASE: ${DB_NAME:-gocrypto}
+      MARIADB_USER: ${DB_USER:-gocrypto}
+      MARIADB_PASSWORD: ${DB_PASSWORD:?set DB_PASSWORD in .env}
+      MARIADB_ROOT_PASSWORD: ${DB_ROOT_PASSWORD:?set DB_ROOT_PASSWORD in .env}
+    command:
+      - --character-set-server=utf8mb4
+      - --collation-server=utf8mb4_unicode_ci
+      - --transaction-isolation=READ-COMMITTED
+      - --default-time-zone=+00:00
+      - --innodb-buffer-pool-size=${DB_BUFFER_POOL:-512M}
+      - --innodb-flush-log-at-trx-commit=1
+      - --sync-binlog=1
+      - --log-bin=mysql-bin
+      - --binlog-format=ROW
+      - --max-connections=500
+    volumes: [mariadb-data:/var/lib/mysql]
+    networks: [backend]
+    healthcheck:
+      test: ['CMD', 'healthcheck.sh', '--connect', '--innodb_initialized']
+      interval: 10s
+      timeout: 5s
+      retries: 10
+
+  redis:
+    image: redis:7.4-alpine
+    restart: unless-stopped
+    # noeviction: BullMQ queues and engine streams must never be evicted.
+    command: ['redis-server', '--appendonly', 'yes', '--appendfsync', 'everysec', '--maxmemory-policy', 'noeviction']
+    volumes: [redis-data:/data]
+    networks: [backend]
+    healthcheck:
+      test: ['CMD', 'redis-cli', 'ping']
+      interval: 10s
+      timeout: 3s
+      retries: 10
+
+  migrate:
+    <<: *backend
+    restart: 'no'
+    command: ['sh', '-c', 'node database/dist/migrate.js up && node database/dist/seed.js']
+    depends_on:
+      mariadb: { condition: service_healthy }
+      redis: { condition: service_healthy }
+
+  api:
+    <<: *backend
+    command: ['node', 'services/api/dist/main.js']
+    healthcheck:
+      <<: *node-health
+      test:
+        [
+          'CMD',
+          'node',
+          '-e',
+          "fetch('http://127.0.0.1:4000/ready').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))",
+        ]
+
+  websocket:
+    <<: *backend
+    command: ['node', 'services/websocket/dist/main.js']
+    healthcheck:
+      <<: *node-health
+      test:
+        [
+          'CMD',
+          'node',
+          '-e',
+          "fetch('http://127.0.0.1:4001/health').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))",
+        ]
+
+  matching-engine:
+    <<: *backend
+    command: ['node', 'services/matching-engine/dist/main.js']
+    environment:
+      <<: *backend-env
+      METRICS_PORT: '9101'
+    stop_grace_period: 30s
+    healthcheck:
+      <<: *node-health
+      test:
+        [
+          'CMD',
+          'node',
+          '-e',
+          "fetch('http://127.0.0.1:9101/health').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))",
+        ]
+
+  risk-engine:
+    <<: *backend
+    command: ['node', 'services/risk-engine/dist/main.js']
+    environment:
+      <<: *backend-env
+      METRICS_PORT: '9102'
+    healthcheck:
+      <<: *node-health
+      test:
+        [
+          'CMD',
+          'node',
+          '-e',
+          "fetch('http://127.0.0.1:9102/health').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))",
+        ]
+
+  market-data:
+    <<: *backend
+    command: ['node', 'services/market-data/dist/main.js']
+    environment:
+      <<: *backend-env
+      METRICS_PORT: '9103'
+    healthcheck:
+      <<: *node-health
+      test:
+        [
+          'CMD',
+          'node',
+          '-e',
+          "fetch('http://127.0.0.1:9103/health').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))",
+        ]
+
+  workers:
+    <<: *backend
+    command: ['node', 'services/workers/dist/main.js']
+    environment:
+      <<: *backend-env
+      METRICS_PORT: '9104'
+    healthcheck:
+      <<: *node-health
+      test:
+        [
+          'CMD',
+          'node',
+          '-e',
+          "fetch('http://127.0.0.1:9104/health').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))",
+        ]
+
+  web:
+    image: gocrypto/web:${GOCRYPTO_VERSION:-local}
+    build:
+      context: .
+      dockerfile: infrastructure/docker/frontend.Dockerfile
+      args: { APP: web }
+    restart: unless-stopped
+    read_only: true
+    tmpfs: [/var/cache/nginx, /var/run, /tmp]
+    networks: [frontend]
+
+  admin:
+    image: gocrypto/admin:${GOCRYPTO_VERSION:-local}
+    build:
+      context: .
+      dockerfile: infrastructure/docker/frontend.Dockerfile
+      args: { APP: admin }
+    restart: unless-stopped
+    read_only: true
+    tmpfs: [/var/cache/nginx, /var/run, /tmp]
+    networks: [frontend]
+
+  nginx:
+    image: nginx:1.27-alpine
+    restart: unless-stopped
+    ports:
+      - '${PUBLIC_HTTP_PORT:-8080}:80'
+      - '${ADMIN_HTTP_PORT:-8081}:8081'
+    volumes:
+      - ./infrastructure/nginx/nginx.conf:/etc/nginx/nginx.conf:ro
+      - ./infrastructure/nginx/conf.d:/etc/nginx/conf.d:ro
+    depends_on:
+      api: { condition: service_healthy }
+      websocket: { condition: service_healthy }
+      web: { condition: service_started }
+      admin: { condition: service_started }
+    networks: [frontend, backend]
+
+  prometheus:
+    image: prom/prometheus:v3.5.0
+    profiles: [monitoring]
+    restart: unless-stopped
+    command: ['--config.file=/etc/prometheus/prometheus.yml', '--storage.tsdb.retention.time=30d']
+    volumes:
+      - ./infrastructure/monitoring/prometheus:/etc/prometheus:ro
+      - prometheus-data:/prometheus
+    ports: ['127.0.0.1:9090:9090']
+    networks: [backend]
+
+  grafana:
+    image: grafana/grafana:12.1.0
+    profiles: [monitoring]
+    restart: unless-stopped
+    environment:
+      GF_SECURITY_ADMIN_PASSWORD: ${GRAFANA_ADMIN_PASSWORD:?set GRAFANA_ADMIN_PASSWORD in .env}
+      GF_USERS_ALLOW_SIGN_UP: 'false'
+      GF_AUTH_ANONYMOUS_ENABLED: 'false'
+    volumes:
+      - ./infrastructure/monitoring/grafana/provisioning:/etc/grafana/provisioning:ro
+      - ./infrastructure/monitoring/grafana/dashboards:/var/lib/grafana/dashboards:ro
+      - grafana-data:/var/lib/grafana
+    ports: ['127.0.0.1:3000:3000']
+    depends_on: [prometheus]
+    networks: [backend]
+
+networks:
+  backend: {}
+  frontend: {}
+
+volumes:
+  mariadb-data: {}
+  redis-data: {}
+  prometheus-data: {}
+  grafana-data: {}

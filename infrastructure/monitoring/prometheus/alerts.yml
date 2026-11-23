@@ -1,0 +1,54 @@
+groups:
+  - name: gocrypto
+    rules:
+      - alert: ServiceDown
+        expr: up == 0
+        for: 1m
+        labels: { severity: critical }
+        annotations:
+          summary: '{{ $labels.job }} is down'
+      - alert: SettlementFailures
+        expr: increase(gocrypto_settlement_failures_total[5m]) > 0
+        labels: { severity: critical }
+        annotations:
+          summary: 'Settlement transactions are failing ({{ $value }} in 5m) — check matching-engine logs and the ledger'
+      - alert: EngineQueueBacklog
+        expr: max(gocrypto_engine_queue_depth) > 500
+        for: 2m
+        labels: { severity: warning }
+        annotations:
+          summary: 'Matching engine backlog on {{ $labels.symbol }}'
+      - alert: SlowEngineCommands
+        expr: histogram_quantile(0.99, sum by (le) (rate(gocrypto_engine_command_duration_seconds_bucket[5m]))) > 0.25
+        for: 5m
+        labels: { severity: warning }
+        annotations:
+          summary: 'p99 engine command latency above 250ms'
+      - alert: HighApiErrorRate
+        expr: sum(rate(gocrypto_http_request_duration_seconds_count{status=~"5.."}[5m])) / clamp_min(sum(rate(gocrypto_http_request_duration_seconds_count[5m])), 1) > 0.02
+        for: 5m
+        labels: { severity: warning }
+        annotations:
+          summary: 'More than 2% of API requests fail with 5xx'
+      - alert: SlowApi
+        expr: histogram_quantile(0.95, sum by (le) (rate(gocrypto_http_request_duration_seconds_bucket[5m]))) > 1
+        for: 10m
+        labels: { severity: warning }
+        annotations:
+          summary: 'API p95 latency above 1s'
+      - alert: LiquidationSpike
+        expr: increase(gocrypto_liquidations_total[10m]) > 50
+        labels: { severity: warning }
+        annotations:
+          summary: 'Unusual number of liquidations in the last 10 minutes'
+      - alert: MarketDataStale
+        expr: rate(gocrypto_market_data_ticks_total[2m]) == 0
+        for: 2m
+        labels: { severity: critical }
+        annotations:
+          summary: 'No index price updates — mark prices and liquidations depend on them'
+      - alert: FailedJobs
+        expr: increase(gocrypto_jobs_total{result="error"}[15m]) > 10
+        labels: { severity: warning }
+        annotations:
+          summary: 'Background jobs failing on queue {{ $labels.queue }}'

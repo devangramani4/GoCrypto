@@ -1,0 +1,41 @@
+# Bare React Native: android/ and ios/ are source code and are committed. Only build output,
+# per-machine files and environment-specific secrets are ignored.
+
+# Metro / bundles
+build/
+*.jsbundle
+.metro-health-check*
+
+# Android
+android/.gradle/
+android/.kotlin/
+android/build/
+android/app/build/
+android/app/.cxx/
+android/local.properties
+android/captures/
+*.iml
+*.hprof
+# Release keystores (only the public debug key is committed)
+*.keystore
+!android/app/debug.keystore
+
+# iOS
+ios/Pods/
+ios/build/
+ios/DerivedData/
+**/xcuserdata/
+*.xcuserstate
+*.hmap
+*.ipa
+*.dSYM.zip
+ios/.xcode.env.local
+vendor/bundle/
+.bundle/
+
+# Firebase configuration differs per environment and is provided by CI / the release pipeline
+android/app/google-services.json
+ios/GoCrypto/GoogleService-Info.plist
+
+# Tests
+coverage/

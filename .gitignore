@@ -1,0 +1,47 @@
+# dependencies
+node_modules/
+.pnpm-store/
+
+# builds
+dist/
+build/
+release/
+out/
+coverage/
+*.tsbuildinfo
+apps/desktop/renderer/
+
+# environment — never commit real env files
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+secrets/
+
+# logs
+logs/
+*.log
+npm-debug.log*
+pnpm-debug.log*
+
+# OS / editors
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/*
+!.vscode/extensions.json
+
+# Mobile signing material (see apps/mobile/.gitignore for native build output)
+*.jks
+*.p8
+*.p12
+*.mobileprovision
+
+# local data
+.data/
+*.sqlite
+
+# load-test outputs (users files hold live session tokens)
+tools/loadtest/users*.json
+tools/loadtest/results/

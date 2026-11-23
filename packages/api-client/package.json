@@ -1,0 +1,22 @@
+{
+  "name": "@gocrypto/api-client",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Typed REST + realtime (Socket.IO) client shared by web, admin, desktop and mobile apps",
+  "type": "module",
+  "main": "./src/index.ts",
+  "types": "./src/index.ts",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "sideEffects": false,
+  "scripts": {
+    "typecheck": "tsc -p tsconfig.json",
+    "test": "vitest run",
+    "build": "tsc -p tsconfig.json"
+  },
+  "dependencies": {
+    "@gocrypto/shared-types": "workspace:*",
+    "socket.io-client": "^4.8.4"
+  }
+}

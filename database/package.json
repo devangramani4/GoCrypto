@@ -1,0 +1,30 @@
+{
+  "name": "@gocrypto/database",
+  "version": "0.1.0",
+  "private": true,
+  "description": "MySQL/MariaDB migrations, migration runner CLI and seed data",
+  "type": "module",
+  "scripts": {
+    "migrate": "tsx scripts/migrate.ts up",
+    "rollback": "tsx scripts/migrate.ts down",
+    "seed": "tsx scripts/seed.ts",
+    "reset": "tsx scripts/migrate.ts reset && tsx scripts/seed.ts",
+    "typecheck": "tsc -p tsconfig.json",
+    "test": "echo 'covered by api integration tests'",
+    "build": "tsup",
+    "migrate:dist": "node dist/migrate.js up",
+    "seed:dist": "node dist/seed.js"
+  },
+  "dependencies": {
+    "@gocrypto/server-core": "workspace:*",
+    "@gocrypto/shared-types": "workspace:*",
+    "@gocrypto/trading-utils": "workspace:*"
+  },
+  "exports": {
+    "./seed": "./seeds/seed.ts",
+    "./data": "./seeds/data.ts"
+  },
+  "devDependencies": {
+    "tsup": "^8.5.1"
+  }
+}

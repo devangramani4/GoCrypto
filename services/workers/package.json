@@ -1,0 +1,26 @@
+{
+  "name": "@gocrypto/workers",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Background workers: notifications, deposits, withdrawals, stop/take-profit triggers, funding, option listing/expiry, portfolio snapshots, maintenance",
+  "type": "module",
+  "main": "./src/index.ts",
+  "scripts": {
+    "dev": "tsx watch --clear-screen=false src/main.ts",
+    "start": "node dist/main.js",
+    "build": "tsup",
+    "typecheck": "tsc -p tsconfig.json",
+    "test": "vitest run --passWithNoTests"
+  },
+  "dependencies": {
+    "@gocrypto/matching-engine": "workspace:*",
+    "@gocrypto/risk-engine": "workspace:*",
+    "@gocrypto/server-core": "workspace:*",
+    "@gocrypto/shared-types": "workspace:*",
+    "@gocrypto/trading-utils": "workspace:*",
+    "bullmq": "^5.81.6"
+  },
+  "devDependencies": {
+    "tsup": "^8.5.1"
+  }
+}

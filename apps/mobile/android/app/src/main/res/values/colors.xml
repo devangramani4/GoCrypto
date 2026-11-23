@@ -1,0 +1,10 @@
+<resources>
+    <!-- Brand palette (packages/ui/src/tokens.ts). -->
+    <color name="window_background">#0A0D12</color>
+    <color name="brand">#2D7BF6</color>
+    <color name="brand_hover">#4A8EF8</color>
+    <!-- Logo blue (packages/ui/src/brand.ts): tints the notification icon and light. -->
+    <color name="notification_accent">#2D7BF6</color>
+    <!-- App-icon tile colour (packages/ui/src/brand.ts). -->
+    <color name="ic_launcher_background">#0A2152</color>
+</resources>

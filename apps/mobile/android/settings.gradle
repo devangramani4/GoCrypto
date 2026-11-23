@@ -1,0 +1,32 @@
+// pnpm hoists React Native and its tooling to the monorepo root, so every path below is resolved
+// through Node's module resolution instead of assuming ../node_modules.
+pluginManagement {
+  def reactNativeGradlePlugin = new File(
+    providers.exec {
+      workingDir(rootDir)
+      commandLine("node", "--print", "require.resolve('@react-native/gradle-plugin/package.json', { paths: [require.resolve('react-native/package.json')] })")
+    }.standardOutput.asText.get().trim()
+  ).getParentFile().absolutePath
+  includeBuild(reactNativeGradlePlugin)
+}
+
+plugins { id("com.facebook.react.settings") }
+
+extensions.configure(com.facebook.react.ReactSettingsExtension) { ex ->
+  // `npx` cannot see the hoisted CLI from apps/mobile; run it through Node's resolution (same as the Podfile).
+  ex.autolinkLibrariesFromCommand(
+    ["node", "-e", "process.argv=['', '', 'config'];require('@react-native-community/cli').run()"],
+    settings.layout.rootDirectory.dir("../").asFile,
+    settings.layout.rootDirectory.files("../package.json", "../react-native.config.js", "../../../pnpm-lock.yaml")
+  )
+}
+
+rootProject.name = 'GoCrypto'
+include ':app'
+
+includeBuild(new File(
+  providers.exec {
+    workingDir(rootDir)
+    commandLine("node", "--print", "require.resolve('@react-native/gradle-plugin/package.json', { paths: [require.resolve('react-native/package.json')] })")
+  }.standardOutput.asText.get().trim()
+).getParentFile())
