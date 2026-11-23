@@ -1,12 +1,11 @@
 import type { FuturesPositionDto, NotificationDto, NotificationType, WsPositionEvent } from '@gocrypto/shared-types';
 import { userChannel } from '@gocrypto/shared-types';
 import { useQueryClient, type QueryClient } from '@tanstack/react-query';
-import * as Notifications from 'expo-notifications';
 import { useEffect, useRef } from 'react';
 import { AppState } from 'react-native';
 import { signOf } from '../lib/format';
 import { haptics } from '../lib/haptics';
-import { registerForPushNotifications } from '../lib/push';
+import { onForegroundPush, onPushOpened, onPushTokenRefresh, registerForPushNotifications } from '../lib/push';
 import { createBatchedInvalidator } from '../lib/queryClient';
 import { qk } from '../lib/queryKeys';
 import { realtime } from '../lib/realtime';
@@ -120,26 +119,26 @@ function usePushRegistration(userId: string | undefined): void {
         });
     };
     if (registeredFor.current !== userId) register();
-    const sub = Notifications.addPushTokenListener(() => register());
-    return () => sub.remove();
+    return onPushTokenRefresh(register);
   }, [userId]);
 }
 
 /** Push taps: route to the related screen (also handles the tap that launched the app). */
 function useNotificationResponses(): void {
-  useEffect(() => {
-    const open = (response: Notifications.NotificationResponse) => {
-      const data = response.notification.request.content.data;
-      openNotificationTarget(data ?? null);
-    };
-    void Notifications.getLastNotificationResponseAsync().then((last) => {
-      if (!last) return;
-      open(last);
-      void Notifications.clearLastNotificationResponseAsync();
-    });
-    const sub = Notifications.addNotificationResponseReceivedListener(open);
-    return () => sub.remove();
-  }, []);
+  useEffect(() => onPushOpened((data) => openNotificationTarget(data)), []);
+}
+
+/** Pushes received while the app is open but the socket is down: same in-app toast as socket events. */
+function useForegroundPushes(): void {
+  const qc = useQueryClient();
+  useEffect(
+    () =>
+      onForegroundPush((title, body, data) => {
+        toast.show({ type: 'info', title, message: body, onPress: () => openNotificationTarget(data) });
+        void qc.invalidateQueries({ queryKey: qk.notifications });
+      }),
+    [qc],
+  );
 }
 
 /** Pauses the socket after 30 s in the background and resumes it in the foreground. */
@@ -173,5 +172,6 @@ export function SignedInEffects(): null {
   useUserRealtimeSync(userId);
   usePushRegistration(userId);
   useNotificationResponses();
+  useForegroundPushes();
   return null;
 }

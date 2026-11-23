@@ -7,7 +7,7 @@ import type {
   WithdrawalStatus,
 } from '@gocrypto/shared-types';
 import { useInfiniteQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import * as Clipboard from 'expo-clipboard';
+import { clipboard } from '../../lib/clipboard';
 import { useState } from 'react';
 import { ActivityIndicator, Alert, FlatList, Pressable, RefreshControl, View } from 'react-native';
 import {
@@ -195,8 +195,8 @@ export function WalletHistoryScreen({ route }: RootScreenProps<'WalletHistory'>)
     );
   };
 
-  const copyHash = async (hash: string) => {
-    await Clipboard.setStringAsync(hash);
+  const copyHash = (hash: string) => {
+    clipboard.copy(hash);
     haptics.success();
     toast.success('Transaction hash copied');
   };
@@ -283,7 +283,7 @@ export function WalletHistoryScreen({ route }: RootScreenProps<'WalletHistory'>)
               title="Copy transaction hash"
               icon="copy"
               variant="secondary"
-              onPress={() => void copyHash(shown.item.txHash)}
+              onPress={() => copyHash(shown.item.txHash)}
               style={s.sheetButton}
             />
           </>
@@ -310,7 +310,7 @@ export function WalletHistoryScreen({ route }: RootScreenProps<'WalletHistory'>)
                 title="Copy transaction hash"
                 icon="copy"
                 variant="secondary"
-                onPress={() => void copyHash(shown.item.txHash ?? '')}
+                onPress={() => copyHash(shown.item.txHash ?? '')}
                 style={s.sheetButton}
               />
             ) : null}

@@ -1,6 +1,6 @@
 import type { UserDto } from '@gocrypto/shared-types';
 import { create } from 'zustand';
-import { api, authEvents, tokenStore } from '../lib/api';
+import { api, authEvents, initDevice, tokenStore } from '../lib/api';
 import { isApiError } from '../lib/errors';
 import { queryClient } from '../lib/queryClient';
 import { onRealtimeSessionRevoked } from '../lib/realtime';
@@ -41,7 +41,8 @@ export const useSession = create<SessionState>()((set, get) => ({
 
   bootstrap: () => {
     bootstrapping ??= (async () => {
-      await settingsHydrated();
+      // The persisted device id must be in place before the first API request.
+      await Promise.all([settingsHydrated(), initDevice()]);
       const tokens = await tokenStore.get();
       if (!tokens || tokens.refreshTokenExpiresAt <= Date.now()) {
         if (tokens) await api.http.setTokens(null);

@@ -4,3 +4,8 @@ packages:
   - packages/*
   - database
   - tools/*
+
+# The mobile app is bare React Native. Some libraries list Expo as an optional peer; removing it here
+# keeps Expo (and its native modules) out of the dependency graph for good.
+overrides:
+  expo: '-'

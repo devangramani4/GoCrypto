@@ -32,10 +32,7 @@ Thumbs.db
 .vscode/*
 !.vscode/extensions.json
 
-# React Native / Expo
-apps/mobile/.expo/
-apps/mobile/ios/
-apps/mobile/android/
+# Mobile signing material (see apps/mobile/.gitignore for native build output)
 *.jks
 *.p8
 *.p12

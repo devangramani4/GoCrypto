@@ -48,7 +48,8 @@ export interface HttpOptions {
   baseUrl: string;
   tokenStore: TokenStore;
   platform: Platform;
-  deviceId: string;
+  /** Stable per-install id (X-Device-Id); a getter when the id is loaded asynchronously after start-up. */
+  deviceId: string | (() => string);
   deviceName?: string;
   /** Web: refresh token travels in an httpOnly cookie instead of the response body. */
   cookieRefresh?: boolean;
@@ -90,7 +91,7 @@ export class HttpClient {
     return {
       accept: 'application/json',
       'x-platform': this.opts.platform,
-      'x-device-id': this.opts.deviceId,
+      'x-device-id': typeof this.opts.deviceId === 'function' ? this.opts.deviceId() : this.opts.deviceId,
       ...(this.opts.deviceName ? { 'x-device-name': this.opts.deviceName } : {}),
       ...(this.opts.cookieRefresh ? { 'x-gc-client': 'web' } : {}),
       ...(token ? { authorization: `Bearer ${token}` } : {}),

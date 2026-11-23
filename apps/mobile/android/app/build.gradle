@@ -1,0 +1,100 @@
+apply plugin: "com.android.application"
+apply plugin: "org.jetbrains.kotlin.android"
+apply plugin: "com.facebook.react"
+
+// Firebase Cloud Messaging: google-services.json is environment-specific and never committed. Without it
+// the app still builds and runs; push registration simply reports "not configured".
+if (file("google-services.json").exists()) {
+    apply plugin: "com.google.gms.google-services"
+} else {
+    logger.lifecycle("GoCrypto: android/app/google-services.json not found - push notifications are disabled in this build.")
+}
+
+/** Resolves a package path through Node, because pnpm hoists React Native to the monorepo root. */
+def nodeResolve = { String request, String from = null ->
+    def script = from == null
+        ? "require.resolve('${request}')"
+        : "require.resolve('${request}', { paths: [require.resolve('${from}')] })"
+    return new File(project.providers.exec {
+        workingDir(rootDir)
+        commandLine("node", "--print", script)
+    }.standardOutput.asText.get().trim())
+}
+
+def reactNativePackage = nodeResolve("react-native/package.json")
+def appPackage = new groovy.json.JsonSlurper().parse(file("../../package.json"))
+
+react {
+    // The app (package.json, index.js, metro.config.js) is apps/mobile; its dependencies are hoisted.
+    root = file("../../")
+    reactNativeDir = reactNativePackage.getParentFile()
+    codegenDir = nodeResolve("@react-native/codegen/package.json", "react-native/package.json").getParentFile()
+    hermesCommand = nodeResolve("hermes-compiler/package.json", "react-native/package.json").getParentFile().absolutePath + "/hermesc/%OS-BIN%/hermesc"
+
+    /* Autolinking */
+    autolinkLibrariesWithApp()
+}
+
+/**
+ * Run R8 on release builds to shrink and obfuscate the Java/Kotlin bytecode.
+ * Keep it off until the release build has been verified with it on a device (see proguard-rules.pro).
+ */
+def enableProguardInReleaseBuilds = false
+
+/**
+ * Release signing comes from Gradle properties, e.g. ~/.gradle/gradle.properties or
+ * ORG_GRADLE_PROJECT_<name> environment variables in CI - never from this repository:
+ *   GOCRYPTO_UPLOAD_STORE_FILE, GOCRYPTO_UPLOAD_STORE_PASSWORD,
+ *   GOCRYPTO_UPLOAD_KEY_ALIAS, GOCRYPTO_UPLOAD_KEY_PASSWORD
+ * Without them the release build is left unsigned.
+ */
+def releaseSigning = project.hasProperty("GOCRYPTO_UPLOAD_STORE_FILE")
+
+android {
+    ndkVersion rootProject.ext.ndkVersion
+    buildToolsVersion rootProject.ext.buildToolsVersion
+    compileSdk rootProject.ext.compileSdkVersion
+
+    namespace "com.gocrypto.app"
+    defaultConfig {
+        applicationId "com.gocrypto.app"
+        minSdkVersion rootProject.ext.minSdkVersion
+        targetSdkVersion rootProject.ext.targetSdkVersion
+        // versionName follows apps/mobile/package.json; versionCode comes from CI (GOCRYPTO_VERSION_CODE).
+        versionCode Integer.parseInt((project.findProperty("GOCRYPTO_VERSION_CODE") ?: "1").toString())
+        versionName appPackage.version
+    }
+    signingConfigs {
+        debug {
+            // The standard, public Android debug key.
+            storeFile file('debug.keystore')
+            storePassword 'android'
+            keyAlias 'androiddebugkey'
+            keyPassword 'android'
+        }
+        if (releaseSigning) {
+            release {
+                storeFile file(GOCRYPTO_UPLOAD_STORE_FILE)
+                storePassword GOCRYPTO_UPLOAD_STORE_PASSWORD
+                keyAlias GOCRYPTO_UPLOAD_KEY_ALIAS
+                keyPassword GOCRYPTO_UPLOAD_KEY_PASSWORD
+            }
+        }
+    }
+    buildTypes {
+        debug {
+            signingConfig signingConfigs.debug
+        }
+        release {
+            if (releaseSigning) signingConfig signingConfigs.release
+            minifyEnabled enableProguardInReleaseBuilds
+            proguardFiles getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro"
+        }
+    }
+}
+
+dependencies {
+    // The version of react-native is set by the React Native Gradle Plugin
+    implementation("com.facebook.react:react-android")
+    implementation("com.facebook.react:hermes-android")
+}

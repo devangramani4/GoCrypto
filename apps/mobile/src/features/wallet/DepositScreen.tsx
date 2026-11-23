@@ -1,6 +1,6 @@
 import { fieldErrors, simulateDepositSchema } from '@gocrypto/validation';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import * as Clipboard from 'expo-clipboard';
+import { clipboard } from '../../lib/clipboard';
 import { useMemo, useState } from 'react';
 import { Pressable, Share, View } from 'react-native';
 import {
@@ -29,8 +29,8 @@ import { toast } from '../../store/toast';
 import { makeStyles, useTheme } from '../../theme';
 import { AssetSelect, NetworkSelect } from './AssetPicker';
 
-async function copy(value: string, what: string): Promise<void> {
-  await Clipboard.setStringAsync(value);
+function copy(value: string, what: string): void {
+  clipboard.copy(value);
   haptics.success();
   toast.success(`${what} copied`);
 }
@@ -145,7 +145,7 @@ export function DepositScreen({ navigation, route }: RootScreenProps<'Deposit'>)
                     title="Copy address"
                     icon="copy"
                     size="sm"
-                    onPress={() => void copy(address.data.address, 'Address')}
+                    onPress={() => copy(address.data.address, 'Address')}
                     block
                     style={s.flex}
                   />
@@ -173,7 +173,7 @@ export function DepositScreen({ navigation, route }: RootScreenProps<'Deposit'>)
                   accessibilityRole="button"
                   accessibilityLabel="Copy memo"
                   hitSlop={8}
-                  onPress={() => void copy(address.data.memo ?? '', 'Memo')}
+                  onPress={() => copy(address.data.memo ?? '', 'Memo')}
                 >
                   <Icon name="copy" size={18} color={t.colors.brand} />
                 </Pressable>

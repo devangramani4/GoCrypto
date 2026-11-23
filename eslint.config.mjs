@@ -13,7 +13,6 @@ export default tseslint.config(
       '**/build/**',
       '**/coverage/**',
       '**/release/**',
-      '**/.expo/**',
       '**/android/**',
       '**/ios/**',
       'apps/desktop/renderer/**',
@@ -33,7 +32,10 @@ export default tseslint.config(
         'warn',
         { argsIgnorePattern: '^_', varsIgnorePattern: '^_', caughtErrorsIgnorePattern: '^_' },
       ],
-      '@typescript-eslint/consistent-type-imports': ['warn', { prefer: 'type-imports', fixStyle: 'inline-type-imports' }],
+      '@typescript-eslint/consistent-type-imports': [
+        'warn',
+        { prefer: 'type-imports', fixStyle: 'inline-type-imports' },
+      ],
       '@typescript-eslint/no-explicit-any': 'warn',
       'no-console': ['warn', { allow: ['warn', 'error'] }],
       eqeqeq: ['error', 'always', { null: 'ignore' }],
@@ -67,6 +69,11 @@ export default tseslint.config(
     files: ['**/*.{js,cjs,mjs}'],
     languageOptions: { globals: { ...globals.node } },
     rules: { '@typescript-eslint/no-require-imports': 'off' },
+  },
+  {
+    // Jest manual mocks of native modules (React Native app).
+    files: ['apps/mobile/__mocks__/**/*.js'],
+    languageOptions: { globals: { ...globals.jest } },
   },
   prettier,
 );

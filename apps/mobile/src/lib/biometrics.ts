@@ -1,6 +1,6 @@
-import * as LocalAuthentication from 'expo-local-authentication';
-import { Platform } from 'react-native';
+import * as Keychain from 'react-native-keychain';
 import { useLock } from '../store/lock';
+import { randomUUID } from './random';
 
 export type BiometricKind = 'face' | 'fingerprint' | 'iris' | 'passcode' | 'none';
 
@@ -14,29 +14,24 @@ export interface BiometricSupport {
 
 const NONE: BiometricSupport = { available: false, kind: 'none', label: 'Biometric unlock' };
 
+const BIOMETRY: Record<Keychain.BIOMETRY_TYPE, Omit<BiometricSupport, 'available'>> = {
+  [Keychain.BIOMETRY_TYPE.FACE_ID]: { kind: 'face', label: 'Face ID' },
+  [Keychain.BIOMETRY_TYPE.TOUCH_ID]: { kind: 'fingerprint', label: 'Touch ID' },
+  [Keychain.BIOMETRY_TYPE.OPTIC_ID]: { kind: 'iris', label: 'Optic ID' },
+  [Keychain.BIOMETRY_TYPE.FACE]: { kind: 'face', label: 'Face unlock' },
+  [Keychain.BIOMETRY_TYPE.FINGERPRINT]: { kind: 'fingerprint', label: 'Fingerprint' },
+  [Keychain.BIOMETRY_TYPE.IRIS]: { kind: 'iris', label: 'Iris' },
+};
+
 export async function getBiometricSupport(): Promise<BiometricSupport> {
   try {
-    const [hasHardware, enrolled, level, types] = await Promise.all([
-      LocalAuthentication.hasHardwareAsync(),
-      LocalAuthentication.isEnrolledAsync(),
-      LocalAuthentication.getEnrolledLevelAsync(),
-      LocalAuthentication.supportedAuthenticationTypesAsync(),
+    const [type, passcode] = await Promise.all([
+      Keychain.getSupportedBiometryType(),
+      Keychain.isPasscodeAuthAvailable(),
     ]);
-    const ios = Platform.OS === 'ios';
-    if (hasHardware && enrolled) {
-      if (types.includes(LocalAuthentication.AuthenticationType.FACIAL_RECOGNITION)) {
-        return { available: true, kind: 'face', label: ios ? 'Face ID' : 'Face unlock' };
-      }
-      if (types.includes(LocalAuthentication.AuthenticationType.FINGERPRINT)) {
-        return { available: true, kind: 'fingerprint', label: ios ? 'Touch ID' : 'Fingerprint' };
-      }
-      if (types.includes(LocalAuthentication.AuthenticationType.IRIS)) {
-        return { available: true, kind: 'iris', label: 'Iris' };
-      }
-    }
+    if (type && BIOMETRY[type]) return { available: true, ...BIOMETRY[type] };
     // No enrolled biometrics, but a device passcode/PIN/pattern can still be used.
-    if (level !== LocalAuthentication.SecurityLevel.NONE)
-      return { available: true, kind: 'passcode', label: 'Device passcode' };
+    if (passcode) return { available: true, kind: 'passcode', label: 'Device passcode' };
     return NONE;
   } catch {
     return NONE;
@@ -45,15 +40,37 @@ export async function getBiometricSupport(): Promise<BiometricSupport> {
 
 export type AuthOutcome = { success: true } | { success: false; cancelled: boolean; message: string };
 
-function describe(error: LocalAuthentication.LocalAuthenticationError): string {
-  switch (error) {
-    case 'lockout':
+/**
+ * The app lock is a device-bound keychain item that can only be read after Face ID / Touch ID /
+ * fingerprint or the device passcode succeeds — the OS, not JavaScript, decides whether the user
+ * authenticated. Its value is a random, meaningless secret.
+ */
+const LOCK_SERVICE = 'gocrypto.applock';
+const LOCK_ITEM: Keychain.SetOptions = {
+  service: LOCK_SERVICE,
+  accessControl: Keychain.ACCESS_CONTROL.BIOMETRY_ANY_OR_DEVICE_PASSCODE,
+  accessible: Keychain.ACCESSIBLE.WHEN_PASSCODE_SET_THIS_DEVICE_ONLY,
+  storage: Keychain.STORAGE_TYPE.AES_GCM,
+  cloudSync: false,
+};
+
+function errorCode(e: unknown): string | undefined {
+  return typeof e === 'object' && e !== null && 'code' in e && typeof e.code === 'string' ? e.code : undefined;
+}
+
+function describe(code: string | undefined): string {
+  switch (code) {
+    case 'E_BIOMETRIC_LOCKOUT':
+    case 'E_BIOMETRIC_LOCKOUT_PERMANENT':
       return 'Too many failed attempts. Use your device passcode or try again later.';
-    case 'not_enrolled':
-    case 'passcode_not_set':
-    case 'not_available':
+    case 'E_BIOMETRIC_NOT_ENROLLED':
+    case 'E_PASSCODE_NOT_SET':
+    case 'E_BIOMETRIC_UNAVAILABLE':
+    case 'E_BIOMETRIC_TEMPORARILY_UNAVAILABLE':
       return 'Biometric unlock is not available on this device. Sign in again to continue.';
-    case 'timeout':
+    case 'E_AUTH_INVALIDATED':
+      return 'Your biometric settings changed. Try again, or sign in again to continue.';
+    case 'E_BIOMETRIC_TIMEOUT':
       return 'Authentication timed out. Try again.';
     default:
       return 'Authentication failed. Try again.';
@@ -66,22 +83,23 @@ function describe(error: LocalAuthentication.LocalAuthenticationError): string {
  */
 export async function authenticate(promptMessage: string): Promise<AuthOutcome> {
   useLock.getState().setAuthenticating(true);
+  const authenticationPrompt: Keychain.AuthenticationPrompt = { title: promptMessage, cancel: 'Cancel' };
   try {
-    const res = await LocalAuthentication.authenticateAsync({
-      promptMessage,
-      fallbackLabel: 'Use passcode',
-      cancelLabel: 'Cancel',
-      disableDeviceFallback: false,
-    });
-    if (res.success) return { success: true };
-    const cancelled =
-      res.error === 'user_cancel' ||
-      res.error === 'system_cancel' ||
-      res.error === 'app_cancel' ||
-      res.error === 'user_fallback';
-    return { success: false, cancelled, message: describe(res.error) };
-  } catch {
-    return { success: false, cancelled: false, message: 'Authentication is unavailable right now.' };
+    let item = await Keychain.getGenericPassword({ service: LOCK_SERVICE, authenticationPrompt });
+    if (!item) {
+      // First use on this install (or after the item was invalidated): create it, then read it back —
+      // the read is what requires the user to authenticate.
+      await Keychain.setGenericPassword('applock', randomUUID(), { ...LOCK_ITEM, authenticationPrompt });
+      item = await Keychain.getGenericPassword({ service: LOCK_SERVICE, authenticationPrompt });
+    }
+    if (item) return { success: true };
+    return { success: false, cancelled: false, message: describe(undefined) };
+  } catch (e) {
+    const code = errorCode(e);
+    // New fingerprints/faces invalidate the item's key: drop it so the next attempt re-creates it.
+    if (code === 'E_AUTH_INVALIDATED')
+      await Keychain.resetGenericPassword({ service: LOCK_SERVICE }).catch(() => undefined);
+    return { success: false, cancelled: code === 'E_AUTH_CANCELED', message: describe(code) };
   } finally {
     useLock.getState().setAuthenticating(false);
   }

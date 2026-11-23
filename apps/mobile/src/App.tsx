@@ -1,8 +1,7 @@
 import { NavigationContainer } from '@react-navigation/native';
 import { QueryClientProvider } from '@tanstack/react-query';
-import { StatusBar } from 'expo-status-bar';
 import { useEffect } from 'react';
-import { ActivityIndicator, View } from 'react-native';
+import { ActivityIndicator, StatusBar, View } from 'react-native';
 import { SafeAreaProvider, initialWindowMetrics } from 'react-native-safe-area-context';
 import { ToastHost } from './components';
 import { Logo } from './components/Logo';
@@ -43,7 +42,7 @@ function AppShell() {
 
   return (
     <View style={s.root}>
-      <StatusBar style={t.dark ? 'light' : 'dark'} />
+      <StatusBar barStyle={t.dark ? 'light-content' : 'dark-content'} />
       {ready ? (
         <NavigationContainer ref={navigationRef} theme={t.navigation} linking={linking} onReady={markNavigationReady}>
           <RootNavigator />

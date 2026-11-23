@@ -1,0 +1,7 @@
+<resources>
+    <string name="app_name">GoCrypto</string>
+    <!-- Must match messaging_android_notification_channel_id in firebase.json. -->
+    <string name="default_notification_channel_id" translatable="false">default</string>
+    <string name="default_notification_channel_name">Trading &amp; account alerts</string>
+    <string name="default_notification_channel_description">Order fills, deposits, withdrawals, liquidation warnings and security alerts.</string>
+</resources>

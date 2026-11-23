@@ -1,23 +1,21 @@
 // Metro configuration for the pnpm monorepo (node-linker=hoisted).
 // Workspace packages (@gocrypto/*) ship TypeScript sources and are resolved through symlinks.
 const path = require('path');
-const { getDefaultConfig } = require('expo/metro-config');
+const { getDefaultConfig, mergeConfig } = require('@react-native/metro-config');
 
 const projectRoot = __dirname;
 const workspaceRoot = path.resolve(projectRoot, '../..');
 
-const config = getDefaultConfig(projectRoot);
+/** @type {import('@react-native/metro-config').MetroConfig} */
+const config = {
+  // 1. Watch the whole monorepo so edits in packages/* hot-reload.
+  watchFolders: [workspaceRoot],
+  resolver: {
+    // 2. Resolve modules from the app first, then from the hoisted root node_modules.
+    nodeModulesPaths: [path.resolve(projectRoot, 'node_modules'), path.resolve(workspaceRoot, 'node_modules')],
+    // 3. Workspace packages expose subpaths via "exports" (e.g. @gocrypto/ui/tokens).
+    unstable_enablePackageExports: true,
+  },
+};
 
-// 1. Watch the whole monorepo so edits in packages/* hot-reload.
-config.watchFolders = [workspaceRoot];
-
-// 2. Resolve modules from the app first, then from the hoisted root node_modules.
-config.resolver.nodeModulesPaths = [
-  path.resolve(projectRoot, 'node_modules'),
-  path.resolve(workspaceRoot, 'node_modules'),
-];
-
-// 3. Workspace packages expose subpaths via "exports" (e.g. @gocrypto/ui/tokens).
-config.resolver.unstable_enablePackageExports = true;
-
-module.exports = config;
+module.exports = mergeConfig(getDefaultConfig(projectRoot), config);

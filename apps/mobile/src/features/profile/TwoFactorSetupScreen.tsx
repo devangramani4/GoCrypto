@@ -1,7 +1,7 @@
 import type { TwoFactorSetupDto } from '@gocrypto/shared-types';
 import { disableTwoFactorSchema, enableTwoFactorSchema, fieldErrors } from '@gocrypto/validation';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
-import * as Clipboard from 'expo-clipboard';
+import { clipboard } from '../../lib/clipboard';
 import { useState } from 'react';
 import { Keyboard, Linking, View } from 'react-native';
 import { Button, Card, CodeInput, Icon, Notice, QrCode, Screen, TextField, Txt } from '../../components';
@@ -77,8 +77,8 @@ function EnableTwoFactor({ onDone }: { onDone: () => void }) {
     enable.mutate(parsed.data.code);
   };
 
-  const copy = async (value: string, what: string) => {
-    await Clipboard.setStringAsync(value);
+  const copy = (value: string, what: string) => {
+    clipboard.copy(value);
     haptics.success();
     toast.success(`${what} copied`);
   };
@@ -119,7 +119,7 @@ function EnableTwoFactor({ onDone }: { onDone: () => void }) {
           title="Copy backup codes"
           icon="copy"
           variant="secondary"
-          onPress={() => void copy(backupCodes.join('\n'), 'Backup codes')}
+          onPress={() => copy(backupCodes.join('\n'), 'Backup codes')}
           style={s.block}
         />
         <Button title="Done" onPress={onDone} style={s.block} />
@@ -178,7 +178,7 @@ function EnableTwoFactor({ onDone }: { onDone: () => void }) {
           icon="copy"
           size="sm"
           variant="ghost"
-          onPress={() => void copy(setup.secret, 'Setup key')}
+          onPress={() => copy(setup.secret, 'Setup key')}
         />
       </Card>
 

@@ -1,14 +1,23 @@
-import * as Haptics from 'expo-haptics';
+import { HapticFeedbackTypes, trigger, type HapticOptions } from 'react-native-haptic-feedback';
 
-const ignore = () => undefined;
+/** Respect the user's system haptics setting; no vibration fallback on devices without a haptic engine. */
+const OPTIONS: HapticOptions = { enableVibrateFallback: false, ignoreAndroidSystemSettings: false };
 
-/** Fire-and-forget haptics (unsupported hardware / simulators simply do nothing). */
+function fire(type: HapticFeedbackTypes): void {
+  try {
+    trigger(type, OPTIONS);
+  } catch {
+    // Unsupported hardware / simulators simply do nothing.
+  }
+}
+
+/** Fire-and-forget haptics. */
 export const haptics = {
-  selection: () => void Haptics.selectionAsync().catch(ignore),
-  light: () => void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(ignore),
-  medium: () => void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium).catch(ignore),
-  heavy: () => void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Heavy).catch(ignore),
-  success: () => void Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(ignore),
-  warning: () => void Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning).catch(ignore),
-  error: () => void Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error).catch(ignore),
+  selection: () => fire(HapticFeedbackTypes.selection),
+  light: () => fire(HapticFeedbackTypes.impactLight),
+  medium: () => fire(HapticFeedbackTypes.impactMedium),
+  heavy: () => fire(HapticFeedbackTypes.impactHeavy),
+  success: () => fire(HapticFeedbackTypes.notificationSuccess),
+  warning: () => fire(HapticFeedbackTypes.notificationWarning),
+  error: () => fire(HapticFeedbackTypes.notificationError),
 };

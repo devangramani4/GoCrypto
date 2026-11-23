@@ -1,9 +1,9 @@
-import * as SecureStore from 'expo-secure-store';
+import * as Keychain from 'react-native-keychain';
 import type { StateStorage } from 'zustand/middleware';
 
 /**
- * Everything the app persists lives in the iOS Keychain / Android Keystore via expo-secure-store.
- * Keys may only contain [A-Za-z0-9._-].
+ * Everything the app persists lives in the iOS Keychain / Android Keystore (react-native-keychain).
+ * Each key is its own keychain item ("service"); values are never synced to iCloud.
  */
 export const SECURE_KEYS = {
   tokens: 'gocrypto.auth.tokens',
@@ -11,59 +11,62 @@ export const SECURE_KEYS = {
   settings: 'gocrypto.settings',
 } as const;
 
+export interface SecureStoreOptions {
+  accessible: Keychain.ACCESSIBLE;
+}
+
 /**
  * Session tokens: never migrated to another device or backup. "After first unlock" (rather than
  * "when unlocked") so a token rotation that happens while the phone locks in the background can
  * still be persisted — losing a rotated refresh token would trip the server's reuse detection.
  */
-export const TOKEN_STORE_OPTIONS: SecureStore.SecureStoreOptions = {
-  keychainAccessible: SecureStore.AFTER_FIRST_UNLOCK_THIS_DEVICE_ONLY,
+export const TOKEN_STORE_OPTIONS: SecureStoreOptions = {
+  accessible: Keychain.ACCESSIBLE.AFTER_FIRST_UNLOCK_THIS_DEVICE_ONLY,
 };
 
 /** Device id and preferences: available after first unlock, never migrated to another device. */
-export const DEVICE_STORE_OPTIONS: SecureStore.SecureStoreOptions = {
-  keychainAccessible: SecureStore.AFTER_FIRST_UNLOCK_THIS_DEVICE_ONLY,
+export const DEVICE_STORE_OPTIONS: SecureStoreOptions = {
+  accessible: Keychain.ACCESSIBLE.AFTER_FIRST_UNLOCK_THIS_DEVICE_ONLY,
 };
 
+/** The keychain "username" of every item (the key is the service). */
+const ACCOUNT = 'gocrypto';
+
+function itemOptions(key: string, options?: SecureStoreOptions): Keychain.SetOptions {
+  return {
+    service: key,
+    accessible: options?.accessible ?? Keychain.ACCESSIBLE.AFTER_FIRST_UNLOCK_THIS_DEVICE_ONLY,
+    // Android: AES-GCM key held by the Android Keystore. No per-read user authentication — the
+    // biometric app lock (lib/biometrics.ts) gates the UI instead.
+    storage: Keychain.STORAGE_TYPE.AES_GCM_NO_AUTH,
+    cloudSync: false,
+  };
+}
+
 /**
- * Reads never throw: a Keystore entry that can no longer be decrypted (e.g. after the user changed
- * the device lock or restored a backup) is treated as missing and removed.
+ * Reads never throw: an entry that can no longer be decrypted (e.g. after the user changed the
+ * device lock or restored a backup) is treated as missing and removed.
  */
-export async function secureGet(key: string, options?: SecureStore.SecureStoreOptions): Promise<string | null> {
+export async function secureGet(key: string, options?: SecureStoreOptions): Promise<string | null> {
   try {
-    return await SecureStore.getItemAsync(key, options);
+    const item = await Keychain.getGenericPassword({ service: key });
+    return item ? item.password : null;
   } catch {
     await secureDelete(key, options);
     return null;
   }
 }
 
-export async function secureSet(key: string, value: string, options?: SecureStore.SecureStoreOptions): Promise<void> {
-  await SecureStore.setItemAsync(key, value, options);
+export async function secureSet(key: string, value: string, options?: SecureStoreOptions): Promise<void> {
+  const stored = await Keychain.setGenericPassword(ACCOUNT, value, itemOptions(key, options));
+  if (!stored) throw new Error(`Secure storage refused to store "${key}"`);
 }
 
-export async function secureDelete(key: string, options?: SecureStore.SecureStoreOptions): Promise<void> {
+export async function secureDelete(key: string, _options?: SecureStoreOptions): Promise<void> {
   try {
-    await SecureStore.deleteItemAsync(key, options);
+    await Keychain.resetGenericPassword({ service: key });
   } catch {
     // nothing stored / not accessible — nothing to delete
-  }
-}
-
-/** Synchronous read used once at startup (device id). */
-export function secureGetSync(key: string, options?: SecureStore.SecureStoreOptions): string | null {
-  try {
-    return SecureStore.getItem(key, options);
-  } catch {
-    return null;
-  }
-}
-
-export function secureSetSync(key: string, value: string, options?: SecureStore.SecureStoreOptions): void {
-  try {
-    SecureStore.setItem(key, value, options);
-  } catch {
-    // Persisting failed: the id is still valid for this run.
   }
 }
 

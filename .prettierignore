@@ -5,5 +5,6 @@ coverage
 release
 pnpm-lock.yaml
 apps/desktop/renderer
-apps/mobile/.expo
 *.sql
+apps/mobile/android
+apps/mobile/ios

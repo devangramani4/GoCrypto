@@ -1,5 +1,4 @@
-import * as SystemUI from 'expo-system-ui';
-import { createContext, useContext, useEffect, type ReactNode } from 'react';
+import { createContext, useContext, type ReactNode } from 'react';
 import { useColorScheme, type ImageStyle, type TextStyle, type ViewStyle } from 'react-native';
 import { useSettings } from '../store/settings';
 import { themes, type AppTheme, type ColorScheme } from './theme';
@@ -12,12 +11,8 @@ export function ThemeProvider({ children }: { children: ReactNode }) {
   const system = useColorScheme();
   const scheme: ColorScheme = mode === 'system' ? (system === 'light' ? 'light' : 'dark') : mode;
   const theme = themes[scheme];
-
-  useEffect(() => {
-    // Root view background: avoids white flashes behind transitions and the keyboard.
-    SystemUI.setBackgroundColorAsync(theme.colors.bg).catch(() => undefined);
-  }, [theme]);
-
+  // The native window/root view backgrounds are the brand dark (styles.xml, SceneDelegate.swift), and
+  // the app's root View paints theme.colors.bg on top.
   return <ThemeContext.Provider value={theme}>{children}</ThemeContext.Provider>;
 }
 

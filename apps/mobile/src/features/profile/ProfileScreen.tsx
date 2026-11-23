@@ -1,7 +1,7 @@
 import type { UserSettingsDto } from '@gocrypto/shared-types';
 import { fieldErrors, verifyEmailSchema } from '@gocrypto/validation';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import * as Clipboard from 'expo-clipboard';
+import { clipboard } from '../../lib/clipboard';
 import { Children, useEffect, useState, type ReactNode } from 'react';
 import { Alert, Pressable, View } from 'react-native';
 import {
@@ -125,9 +125,9 @@ export function ProfileScreen({ navigation }: TabScreenProps<'Profile'>) {
     ]);
   };
 
-  const copyUid = async () => {
+  const copyUid = () => {
     if (!user) return;
-    await Clipboard.setStringAsync(user.uid);
+    clipboard.copy(user.uid);
     haptics.success();
     toast.success('UID copied');
   };
@@ -164,7 +164,7 @@ export function ProfileScreen({ navigation }: TabScreenProps<'Profile'>) {
               <Pressable
                 accessibilityRole="button"
                 accessibilityLabel="Copy UID"
-                onPress={() => void copyUid()}
+                onPress={copyUid}
                 style={s.uid}
                 hitSlop={6}
               >

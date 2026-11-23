@@ -1,18 +1,15 @@
 import { GoCryptoClient, type TokenStore } from '@gocrypto/api-client';
 import type { AuthTokens, Platform as ApiPlatform } from '@gocrypto/shared-types';
-import * as Device from 'expo-device';
-import * as ExpoCrypto from 'expo-crypto';
 import { AppState, Platform } from 'react-native';
 import { config } from '../config';
+import { randomUUID } from './random';
 import {
   DEVICE_STORE_OPTIONS,
   SECURE_KEYS,
   TOKEN_STORE_OPTIONS,
   secureDelete,
   secureGet,
-  secureGetSync,
   secureSet,
-  secureSetSync,
 } from './secureStorage';
 
 function isRecord(v: unknown): v is Record<string, unknown> {
@@ -96,38 +93,66 @@ class SecureTokenStore implements TokenStore {
   }
 }
 
-/** Stable per-install id (sent as X-Device-Id); survives app restarts, not reinstalls. */
-function loadDeviceId(): string {
-  const existing = secureGetSync(SECURE_KEYS.deviceId, DEVICE_STORE_OPTIONS);
-  if (existing && /^[A-Za-z0-9_\-:.]{8,128}$/.test(existing)) return existing;
-  const id = `${Platform.OS}-${ExpoCrypto.randomUUID()}`;
-  secureSetSync(SECURE_KEYS.deviceId, id, DEVICE_STORE_OPTIONS);
-  return id;
+const DEVICE_ID_RE = /^[A-Za-z0-9_\-:.]{8,128}$/;
+
+/**
+ * Stable per-install id (sent as X-Device-Id). Starts as a fresh id and is replaced by the persisted
+ * one in initDevice(), which the session bootstrap awaits before the first request.
+ */
+let deviceId = `${Platform.OS}-${randomUUID()}`;
+let deviceInit: Promise<void> | null = null;
+
+/** Loads the persisted device id, or persists the fresh one. Never throws. */
+export function initDevice(): Promise<void> {
+  deviceInit ??= (async () => {
+    const stored = await secureGet(SECURE_KEYS.deviceId, DEVICE_STORE_OPTIONS);
+    if (stored && DEVICE_ID_RE.test(stored)) {
+      deviceId = stored;
+      return;
+    }
+    // Persisting failed: the id is still valid for this run.
+    await secureSet(SECURE_KEYS.deviceId, deviceId, DEVICE_STORE_OPTIONS).catch(() => undefined);
+  })();
+  return deviceInit;
+}
+
+function capitalize(word: string): string {
+  return word ? word.charAt(0).toUpperCase() + word.slice(1) : word;
 }
 
 /**
- * Human-readable device label. HTTP header values must be ASCII (OkHttp rejects anything else),
- * and iOS device names often contain typographic apostrophes ("Anna’s iPhone").
+ * Human-readable device label, e.g. "Google Pixel 9" or "iPhone (iOS 26.1)". HTTP header values must be
+ * ASCII (OkHttp rejects anything else).
  */
 function loadDeviceName(): string {
-  const generic = /^(iphone|ipad|android)$/i;
-  const raw =
-    Device.deviceName && !generic.test(Device.deviceName.trim())
-      ? Device.deviceName
-      : (Device.modelName ?? (Platform.OS === 'ios' ? 'iPhone' : 'Android device'));
+  let raw: string;
+  if (Platform.OS === 'android') {
+    const { Manufacturer = '', Model = '' } = Platform.constants;
+    const maker = capitalize(Manufacturer.trim());
+    raw = Model.toLowerCase().startsWith(maker.toLowerCase()) ? Model : `${maker} ${Model}`;
+  } else if (Platform.OS === 'ios') {
+    const { interfaceIdiom, osVersion } = Platform.constants;
+    raw = `${interfaceIdiom === 'pad' ? 'iPad' : 'iPhone'} (iOS ${osVersion})`;
+  } else {
+    raw = 'Mobile device';
+  }
   const ascii = raw
-    .replace(/[‘’ʼ]/g, "'")
     .replace(/[^\x20-\x7E]/g, '')
+    .replace(/\s+/g, ' ')
     .trim()
     .slice(0, 64);
   return ascii || (Platform.OS === 'ios' ? 'iPhone' : 'Android device');
 }
 
+const platform: ApiPlatform = Platform.OS === 'ios' ? 'IOS' : 'ANDROID';
+
 export const device = {
-  id: loadDeviceId(),
+  get id(): string {
+    return deviceId;
+  },
   name: loadDeviceName(),
-  platform: (Platform.OS === 'ios' ? 'IOS' : 'ANDROID') satisfies ApiPlatform,
-} as const;
+  platform,
+};
 
 type TokensListener = (tokens: AuthTokens | null) => void;
 type Listener = () => void;
@@ -162,7 +187,7 @@ export const api = new GoCryptoClient({
   baseUrl: config.apiUrl,
   tokenStore,
   platform: device.platform,
-  deviceId: device.id,
+  deviceId: () => device.id,
   deviceName: device.name,
   onTokens: (tokens) => {
     for (const l of tokenListeners) l(tokens);
@@ -185,5 +210,5 @@ export async function getFreshAccessToken(): Promise<string | null> {
 
 /** Idempotency key / one-off id (32 hex chars) from the platform CSPRNG. */
 export function newIdempotencyKey(prefix = ''): string {
-  return `${prefix}${ExpoCrypto.randomUUID().replace(/-/g, '')}`;
+  return `${prefix}${randomUUID().replace(/-/g, '')}`;
 }

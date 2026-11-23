@@ -1,7 +1,7 @@
 import { D, ROUND_DOWN } from '@gocrypto/trading-utils';
 import { fieldErrors, withdrawSchema, type WithdrawInput } from '@gocrypto/validation';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import * as Clipboard from 'expo-clipboard';
+import { clipboard } from '../../lib/clipboard';
 import { useEffect, useMemo, useState } from 'react';
 import { Keyboard, Pressable, View } from 'react-native';
 import {
@@ -256,7 +256,7 @@ export function WithdrawScreen({ navigation, route }: RootScreenProps<'Withdraw'
             accessibilityLabel="Paste address"
             hitSlop={8}
             onPress={() => {
-              void Clipboard.getStringAsync().then((text) => {
+              void clipboard.paste().then((text) => {
                 if (text) {
                   setAddress(text.trim());
                   setAddressCheck(null);
