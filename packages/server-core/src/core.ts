@@ -9,6 +9,9 @@ import { QueueService } from './queues';
 import { RedisClients, RedisLock } from './redis';
 import { AuditService } from './services/audit';
 import { FeeService } from './services/fees';
+import { FuturesService } from './services/futures';
+import { OptionsService } from './services/options';
+import { OrderRepository } from './services/orders';
 import { NotificationService } from './services/notifications';
 import { PriceService } from './services/prices';
 import { UserService } from './services/users';
@@ -42,6 +45,9 @@ export class Core {
   readonly wallet: WalletService;
   readonly audit: AuditService;
   readonly notifications: NotificationService;
+  readonly orders: OrderRepository;
+  readonly futures: FuturesService;
+  readonly options: OptionsService;
   private subscriber: EventSubscriber | null = null;
   private refreshTimer: NodeJS.Timeout | null = null;
 
@@ -62,6 +68,9 @@ export class Core {
     this.wallet = new WalletService(this);
     this.audit = new AuditService(this);
     this.notifications = new NotificationService(this);
+    this.orders = new OrderRepository(this);
+    this.futures = new FuturesService(this);
+    this.options = new OptionsService(this);
   }
 
   static async create(serviceName: string, opts: CoreOptions = {}): Promise<Core> {

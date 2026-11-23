@@ -1,0 +1,29 @@
+{
+  "name": "@gocrypto/risk-engine",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Risk engine: pre-trade order admission (balance, margin, leverage, limits), withdrawal risk scoring and the atomic liquidation engine",
+  "type": "module",
+  "main": "./src/index.ts",
+  "types": "./src/index.ts",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "scripts": {
+    "dev": "tsx watch --clear-screen=false src/main.ts",
+    "start": "node dist/main.js",
+    "build": "tsup src/main.ts --format esm --target node22 --out-dir dist --clean --sourcemap --no-splitting --external mysql2 --external ioredis --external bullmq --external @node-rs/argon2 --external pino --external prom-client",
+    "typecheck": "tsc -p tsconfig.json",
+    "test": "vitest run"
+  },
+  "dependencies": {
+    "@gocrypto/matching-engine": "workspace:*",
+    "@gocrypto/server-core": "workspace:*",
+    "@gocrypto/shared-types": "workspace:*",
+    "@gocrypto/trading-utils": "workspace:*",
+    "@gocrypto/validation": "workspace:*"
+  },
+  "devDependencies": {
+    "tsup": "^8.5.1"
+  }
+}
