@@ -27,7 +27,7 @@ export function VolumeChart({ series }: { series: readonly VolumePoint[] }) {
     const text = cssVar('--c-text-muted', '#8b95a7');
     const grid = cssVar('--c-chart-grid', 'rgba(139, 149, 167, 0.08)');
     const border = cssVar('--c-border', '#1f2632');
-    const brand = cssVar('--c-brand', '#6c7cff');
+    const brand = cssVar('--c-brand', '#2d7bf6');
     const chart = createChart(el, {
       autoSize: true,
       layout: { background: { type: ColorType.Solid, color: 'transparent' }, textColor: text, fontFamily: 'Inter, system-ui, sans-serif', fontSize: 11 },

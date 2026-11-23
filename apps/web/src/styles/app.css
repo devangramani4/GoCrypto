@@ -1379,7 +1379,7 @@
   line-height: 1.6;
 }
 .grad {
-  background: linear-gradient(90deg, var(--c-brand), #b07cff 55%, var(--c-up));
+  background: linear-gradient(90deg, var(--c-brand), #22d3ee 55%, var(--c-up));
   -webkit-background-clip: text;
   background-clip: text;
   color: transparent;
@@ -1913,7 +1913,7 @@
   gap: 32px;
   padding: 36px 44px;
   background:
-    radial-gradient(800px 420px at -10% -10%, rgba(108, 124, 255, 0.28), transparent 60%),
+    radial-gradient(800px 420px at -10% -10%, rgba(45, 123, 246, 0.28), transparent 60%),
     radial-gradient(600px 380px at 110% 110%, rgba(34, 195, 142, 0.16), transparent 60%), var(--c-surface-alt);
   border-right: 1px solid var(--c-border);
 }
