@@ -33,6 +33,9 @@ pnpm --filter @gocrypto/desktop dist:mac     # dmg + zip (x64, arm64), hardened 
 pnpm --filter @gocrypto/desktop dist:linux   # AppImage + deb
 ```
 
+The app icon, `resources/icon.png`, is generated from the shared logo: run
+`pnpm --filter @gocrypto/brand generate` after changing `packages/ui/src/brand.ts`.
+
 Code signing and notarization credentials are read by electron-builder from the CI environment
 (`CSC_LINK`, `CSC_KEY_PASSWORD`, `APPLE_ID`, `APPLE_APP_SPECIFIC_PASSWORD`, `APPLE_TEAM_ID`, …) — never commit them.
 

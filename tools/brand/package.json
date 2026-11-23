@@ -1,0 +1,17 @@
+{
+  "name": "@gocrypto/brand",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Writes the GoCrypto logo files (favicons; iOS, Android and desktop app icons) from packages/ui/src/brand.ts",
+  "type": "module",
+  "scripts": {
+    "generate": "tsx src/generate.ts",
+    "typecheck": "tsc -p tsconfig.json --noEmit"
+  },
+  "dependencies": {
+    "@gocrypto/ui": "workspace:*"
+  },
+  "devDependencies": {
+    "@resvg/resvg-js": "^2.6.2"
+  }
+}

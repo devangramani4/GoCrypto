@@ -1,36 +1,53 @@
+import { logo } from '@gocrypto/ui/brand';
 import { View } from 'react-native';
-import Svg, { Defs, LinearGradient, Polyline, Rect, Stop } from 'react-native-svg';
-import { useTheme } from '../theme';
+import Svg, { Defs, LinearGradient, Path, Stop } from 'react-native-svg';
 import { Txt } from './Txt';
 
-/** Brand mark: indigo tile with a rising chart line. */
+const glyphStroke = {
+  fill: 'none',
+  strokeWidth: logo.glyph.width,
+  strokeLinecap: 'round',
+  strokeLinejoin: 'round',
+} as const;
+
+/** Brand mark: blue shield with a white "G". Same geometry as the web logo and the app icons. */
 export function LogoMark({ size = 56 }: { size?: number }) {
-  const t = useTheme();
+  const { shield, glyph } = logo;
+  const gradient = shield.gradient;
   return (
-    <Svg width={size} height={size} viewBox="0 0 64 64">
+    <Svg width={size} height={size} viewBox={logo.markViewBox}>
       <Defs>
-        <LinearGradient id="gc-logo" x1="0" y1="0" x2="1" y2="1">
-          <Stop offset="0" stopColor={t.colors.brandHover} />
-          <Stop offset="1" stopColor={t.colors.brand} />
+        <LinearGradient
+          id="gc-shield"
+          gradientUnits="userSpaceOnUse"
+          x1={gradient.x1}
+          y1={gradient.y1}
+          x2={gradient.x2}
+          y2={gradient.y2}
+        >
+          {gradient.stops.map(([offset, color]) => (
+            <Stop key={offset} offset={offset} stopColor={color} />
+          ))}
         </LinearGradient>
       </Defs>
-      <Rect x={0} y={0} width={64} height={64} rx={18} fill="url(#gc-logo)" />
-      <Polyline
-        points="14 42 26 30 34 37 50 21"
+      <Path d={shield.path} fill="url(#gc-shield)" />
+      <Path d={shield.shade.path} fill={shield.shade.color} fillOpacity={shield.shade.opacity} />
+      <Path
+        d={shield.highlight.path}
         fill="none"
-        stroke={t.colors.onBrand}
-        strokeWidth={5}
+        stroke={shield.highlight.color}
+        strokeOpacity={shield.highlight.opacity}
+        strokeWidth={shield.highlight.width}
         strokeLinecap="round"
-        strokeLinejoin="round"
       />
-      <Polyline
-        points="41 21 50 21 50 30"
-        fill="none"
-        stroke={t.colors.onBrand}
-        strokeWidth={5}
-        strokeLinecap="round"
-        strokeLinejoin="round"
+      <Path
+        d={glyph.path}
+        {...glyphStroke}
+        stroke={glyph.shadow.color}
+        strokeOpacity={glyph.shadow.opacity}
+        transform={`translate(${glyph.shadow.dx} ${glyph.shadow.dy})`}
       />
+      <Path d={glyph.path} {...glyphStroke} stroke={glyph.color} />
     </Svg>
   );
 }

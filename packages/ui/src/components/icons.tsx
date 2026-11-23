@@ -1,4 +1,5 @@
-import type { SVGProps } from 'react';
+import { useId, type SVGProps } from 'react';
+import { logo } from '../brand';
 
 /** Minimal stroke icon set (24x24 grid, currentColor). */
 const paths = {
@@ -93,33 +94,70 @@ export function Icon({
   );
 }
 
-/** GoCrypto logo mark: stylised "G" arrow inside a rounded hexagon gradient. */
+/**
+ * GoCrypto logo mark: a blue shield with a white "G". Geometry and colours come from ../brand.ts,
+ * which also drives the app icons and favicons.
+ */
+export function LogoMark({ size = 28, label = 'GoCrypto' }: { size?: number; label?: string | null }) {
+  // Unique per instance: a hidden copy of the logo must not take the gradient the others point to.
+  const gradientId = `gc-shield-${useId().replace(/[^\w-]/g, '')}`;
+  const { shield, glyph } = logo;
+  const gradient = shield.gradient;
+  const glyphStroke = {
+    fill: 'none',
+    strokeWidth: glyph.width,
+    strokeLinecap: 'round',
+    strokeLinejoin: 'round',
+  } as const;
+  return (
+    <svg
+      width={size}
+      height={size}
+      viewBox={logo.markViewBox}
+      {...(label ? { role: 'img', 'aria-label': label } : { 'aria-hidden': true, focusable: false })}
+    >
+      <defs>
+        <linearGradient
+          id={gradientId}
+          gradientUnits="userSpaceOnUse"
+          x1={gradient.x1}
+          y1={gradient.y1}
+          x2={gradient.x2}
+          y2={gradient.y2}
+        >
+          {gradient.stops.map(([offset, color]) => (
+            <stop key={offset} offset={offset} stopColor={color} />
+          ))}
+        </linearGradient>
+      </defs>
+      <path d={shield.path} fill={`url(#${gradientId})`} />
+      <path d={shield.shade.path} fill={shield.shade.color} fillOpacity={shield.shade.opacity} />
+      <path
+        d={shield.highlight.path}
+        fill="none"
+        stroke={shield.highlight.color}
+        strokeOpacity={shield.highlight.opacity}
+        strokeWidth={shield.highlight.width}
+        strokeLinecap="round"
+      />
+      <path
+        d={glyph.path}
+        {...glyphStroke}
+        stroke={glyph.shadow.color}
+        strokeOpacity={glyph.shadow.opacity}
+        transform={`translate(${glyph.shadow.dx} ${glyph.shadow.dy})`}
+      />
+      <path d={glyph.path} {...glyphStroke} stroke={glyph.color} />
+    </svg>
+  );
+}
+
+/** Logo mark followed by the "GoCrypto" name in the current text colour. */
 export function Logo({ size = 28, withText = true }: { size?: number; withText?: boolean }) {
   return (
-    <span className="row" style={{ gap: 8 }}>
-      <svg width={size} height={size} viewBox="0 0 32 32" aria-label="GoCrypto">
-        <defs>
-          <linearGradient id="gc-logo" x1="0" y1="0" x2="1" y2="1">
-            <stop offset="0" stopColor="#6C7CFF" />
-            <stop offset="1" stopColor="#22D3EE" />
-          </linearGradient>
-        </defs>
-        <path d="M16 1.5 28.5 8.75v14.5L16 30.5 3.5 23.25V8.75z" fill="url(#gc-logo)" />
-        <path d="M21.5 11.5A7 7 0 1 0 22.6 18H16" fill="none" stroke="#fff" strokeWidth="2.6" strokeLinecap="round" />
-        <path
-          d="m18.5 15 3.2 3-3.2 3"
-          fill="none"
-          stroke="#fff"
-          strokeWidth="2.2"
-          strokeLinecap="round"
-          strokeLinejoin="round"
-        />
-      </svg>
-      {withText && (
-        <span style={{ fontWeight: 700, fontSize: size * 0.62, letterSpacing: '-0.02em' }}>
-          Go<span style={{ color: 'var(--c-brand)' }}>Crypto</span>
-        </span>
-      )}
+    <span className="row" style={{ gap: 6 }}>
+      <LogoMark size={size} label={withText ? null : 'GoCrypto'} />
+      {withText && <span style={{ fontWeight: 700, fontSize: size * 0.62, letterSpacing: '-0.02em' }}>GoCrypto</span>}
     </span>
   );
 }

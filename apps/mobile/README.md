@@ -89,6 +89,11 @@ cd android && ./gradlew bundleRelease   # app/build/outputs/bundle/release/app-r
 `MARKETING_VERSION` (Xcode "Version") in sync with `package.json` and raise `CURRENT_PROJECT_VERSION` for every
 upload.
 
+## App icons
+
+The launcher, notification and launch-screen icons are generated from the shared logo in
+`packages/ui/src/brand.ts`: edit it and run `pnpm --filter @gocrypto/brand generate` (see `tools/brand`).
+
 ## Tests and checks
 
 ```bash
