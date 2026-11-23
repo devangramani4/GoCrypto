@@ -33,7 +33,14 @@ export function fmtTime(ts: number, withDate = true): string {
 
 export function fmtDateTime(ts: number | null | undefined): string {
   if (!ts) return '—';
-  return new Date(ts).toLocaleString(undefined, { year: 'numeric', month: 'short', day: '2-digit', hour: '2-digit', minute: '2-digit', hour12: false });
+  return new Date(ts).toLocaleString(undefined, {
+    year: 'numeric',
+    month: 'short',
+    day: '2-digit',
+    hour: '2-digit',
+    minute: '2-digit',
+    hour12: false,
+  });
 }
 
 export function fmtCountdown(ms: number): string {

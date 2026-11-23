@@ -81,7 +81,22 @@ describe('Withdraw', () => {
   });
 
   it('shows the fee-adjusted amount and requires the PIN', async () => {
-    mockApi.wallet.withdraw.mockResolvedValue({ id: '9', asset: 'USDT', network: 'TRC20', address: ADDRESS, memo: null, amount: '100', fee: '1', receiveAmount: '99', status: 'PROCESSING', txHash: null, riskFlags: [], reviewNote: null, createdAt: 0, completedAt: null });
+    mockApi.wallet.withdraw.mockResolvedValue({
+      id: '9',
+      asset: 'USDT',
+      network: 'TRC20',
+      address: ADDRESS,
+      memo: null,
+      amount: '100',
+      fee: '1',
+      receiveAmount: '99',
+      status: 'PROCESSING',
+      txHash: null,
+      riskFlags: [],
+      reviewNote: null,
+      createdAt: 0,
+      completedAt: null,
+    });
     await fill('100');
     expect(screen.getByText('99 USDT')).toBeInTheDocument();
     await userEvent.click(screen.getByRole('button', { name: 'Withdraw' }));
@@ -103,7 +118,9 @@ describe('Withdraw', () => {
   });
 
   it('reuses the same idempotency key when retrying after a failure', async () => {
-    mockApi.wallet.withdraw.mockRejectedValueOnce(new ApiError(0, null, 'Network error')).mockRejectedValueOnce(new ApiError(0, null, 'Network error'));
+    mockApi.wallet.withdraw
+      .mockRejectedValueOnce(new ApiError(0, null, 'Network error'))
+      .mockRejectedValueOnce(new ApiError(0, null, 'Network error'));
     await fill('50');
     await userEvent.click(screen.getByRole('button', { name: 'Withdraw' }));
     await userEvent.type(await screen.findByLabelText('Security PIN'), '135790');
@@ -111,7 +128,9 @@ describe('Withdraw', () => {
     expect(await screen.findByText('Network error')).toBeInTheDocument();
     await userEvent.click(screen.getByRole('button', { name: 'Confirm withdrawal' }));
     await waitFor(() => expect(mockApi.wallet.withdraw).toHaveBeenCalledTimes(2));
-    const [first, second] = mockApi.wallet.withdraw.mock.calls.map((c) => (c as unknown as [{ idempotencyKey: string }])[0].idempotencyKey);
+    const [first, second] = mockApi.wallet.withdraw.mock.calls.map(
+      (c) => (c as unknown as [{ idempotencyKey: string }])[0].idempotencyKey,
+    );
     expect(first).toBe(second);
   });
 

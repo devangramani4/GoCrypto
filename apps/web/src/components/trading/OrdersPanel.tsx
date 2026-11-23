@@ -22,7 +22,13 @@ const ORDER_TYPE_LABEL: Record<string, string> = {
 export function statusTone(status: string): 'up' | 'down' | 'warn' | 'brand' | undefined {
   if (status === 'FILLED' || status === 'COMPLETED') return 'up';
   if (status === 'REJECTED' || status === 'FAILED') return 'down';
-  if (status === 'PARTIALLY_FILLED' || status === 'PENDING_REVIEW' || status === 'CONFIRMING' || status === 'PROCESSING') return 'warn';
+  if (
+    status === 'PARTIALLY_FILLED' ||
+    status === 'PENDING_REVIEW' ||
+    status === 'CONFIRMING' ||
+    status === 'PROCESSING'
+  )
+    return 'warn';
   if (status === 'OPEN' || status === 'NEW' || status === 'PENDING' || status === 'APPROVED') return 'brand';
   return undefined;
 }
@@ -33,23 +39,43 @@ export function StatusBadge({ status }: { status: string }) {
 
 function orderTypeLabel(o: OrderDto): ReactNode {
   const base = ORDER_TYPE_LABEL[o.type] ?? humanize(o.type);
-  const flags = [o.postOnly && 'Post', o.reduceOnly && 'Reduce', o.closePosition && 'Close', o.ocoGroupId && 'OCO'].filter(Boolean).join(' · ');
+  const flags = [o.postOnly && 'Post', o.reduceOnly && 'Reduce', o.closePosition && 'Close', o.ocoGroupId && 'OCO']
+    .filter(Boolean)
+    .join(' · ');
   return (
     <span className="col" style={{ gap: 1 }}>
       <span>{base}</span>
-      {flags && <span className="faint" style={{ fontSize: 10 }}>{flags}</span>}
+      {flags && (
+        <span className="faint" style={{ fontSize: 10 }}>
+          {flags}
+        </span>
+      )}
     </span>
   );
 }
 
-function useOrderColumns(kind: 'open' | 'history', markets: Map<string, MarketDto>, onCancel?: (o: OrderDto) => void, cancelling?: string | null): Column<OrderDto>[] {
+function useOrderColumns(
+  kind: 'open' | 'history',
+  markets: Map<string, MarketDto>,
+  onCancel?: (o: OrderDto) => void,
+  cancelling?: string | null,
+): Column<OrderDto>[] {
   const cols: Column<OrderDto>[] = [
     { key: 'time', header: 'Time', render: (o) => <span className="muted num">{fmtDateTime(o.createdAt)}</span> },
     {
       key: 'symbol',
       header: 'Pair',
       render: (o) => (
-        <Link to={o.marketType === 'FUTURES' ? `/futures/${o.symbol}` : o.marketType === 'OPTIONS' ? '/options' : `/trade/${o.symbol}`} className="strong-link">
+        <Link
+          to={
+            o.marketType === 'FUTURES'
+              ? `/futures/${o.symbol}`
+              : o.marketType === 'OPTIONS'
+                ? '/options'
+                : `/trade/${o.symbol}`
+          }
+          className="strong-link"
+        >
           {o.symbol}
         </Link>
       ),
@@ -58,7 +84,21 @@ function useOrderColumns(kind: 'open' | 'history', markets: Map<string, MarketDt
     {
       key: 'side',
       header: 'Side',
-      render: (o) => <span className={o.side === 'BUY' ? 'up' : 'down'}>{o.marketType === 'FUTURES' ? (o.side === 'BUY' ? (o.reduceOnly ? 'Close short' : 'Buy/Long') : o.reduceOnly ? 'Close long' : 'Sell/Short') : o.side === 'BUY' ? 'Buy' : 'Sell'}</span>,
+      render: (o) => (
+        <span className={o.side === 'BUY' ? 'up' : 'down'}>
+          {o.marketType === 'FUTURES'
+            ? o.side === 'BUY'
+              ? o.reduceOnly
+                ? 'Close short'
+                : 'Buy/Long'
+              : o.reduceOnly
+                ? 'Close long'
+                : 'Sell/Short'
+            : o.side === 'BUY'
+              ? 'Buy'
+              : 'Sell'}
+        </span>
+      ),
     },
     {
       key: 'price',
@@ -75,7 +115,12 @@ function useOrderColumns(kind: 'open' | 'history', markets: Map<string, MarketDt
       key: 'trigger',
       header: 'Trigger',
       align: 'right',
-      render: (o) => (o.stopPrice ? <span className="num">{`${o.triggerState === 'TRIGGERED' ? '✓ ' : ''}${fmtPrice(o.stopPrice, markets.get(o.symbol))}`}</span> : <span className="faint">—</span>),
+      render: (o) =>
+        o.stopPrice ? (
+          <span className="num">{`${o.triggerState === 'TRIGGERED' ? '✓ ' : ''}${fmtPrice(o.stopPrice, markets.get(o.symbol))}`}</span>
+        ) : (
+          <span className="faint">—</span>
+        ),
     },
     {
       key: 'amount',
@@ -84,20 +129,39 @@ function useOrderColumns(kind: 'open' | 'history', markets: Map<string, MarketDt
       render: (o) => {
         const m = markets.get(o.symbol);
         const qty = o.quantity ?? (o.quoteQuantity ? `${formatNumber(o.quoteQuantity, 2)} ${m?.quote ?? ''}` : '—');
-        const pct = o.quantity && D(o.quantity).gt(0) ? D(o.filledQuantity).div(o.quantity).mul(100).toNumber() : o.status === 'FILLED' ? 100 : 0;
+        const pct =
+          o.quantity && D(o.quantity).gt(0)
+            ? D(o.filledQuantity).div(o.quantity).mul(100).toNumber()
+            : o.status === 'FILLED'
+              ? 100
+              : 0;
         return (
           <span className="col num" style={{ gap: 3, alignItems: 'flex-end' }}>
             <span>
               {fmtQty(o.filledQuantity, m)} / {o.quantity ? fmtQty(o.quantity, m) : qty}
             </span>
-            {kind === 'open' && <span style={{ width: 70 }}><Progress value={pct} tone="up" /></span>}
+            {kind === 'open' && (
+              <span style={{ width: 70 }}>
+                <Progress value={pct} tone="up" />
+              </span>
+            )}
           </span>
         );
       },
     },
   ];
   if (kind === 'history') {
-    cols.push({ key: 'fee', header: 'Fee', align: 'right', render: (o) => (D(o.feeTotal).gt(0) ? <span className="num muted">{`${formatNumber(o.feeTotal, 6, { trim: true })} ${o.feeAsset ?? ''}`}</span> : <span className="faint">—</span>) });
+    cols.push({
+      key: 'fee',
+      header: 'Fee',
+      align: 'right',
+      render: (o) =>
+        D(o.feeTotal).gt(0) ? (
+          <span className="num muted">{`${formatNumber(o.feeTotal, 6, { trim: true })} ${o.feeAsset ?? ''}`}</span>
+        ) : (
+          <span className="faint">—</span>
+        ),
+    });
     cols.push({
       key: 'status',
       header: 'Status',
@@ -105,12 +169,21 @@ function useOrderColumns(kind: 'open' | 'history', markets: Map<string, MarketDt
       render: (o) => (
         <span className="col" style={{ gap: 2, alignItems: 'flex-end' }}>
           <StatusBadge status={o.status} />
-          {o.rejectReason && <span className="faint" style={{ fontSize: 10 }}>{humanize(o.rejectReason)}</span>}
+          {o.rejectReason && (
+            <span className="faint" style={{ fontSize: 10 }}>
+              {humanize(o.rejectReason)}
+            </span>
+          )}
         </span>
       ),
     });
   } else {
-    cols.push({ key: 'status', header: 'Status', align: 'right', render: (o) => <StatusBadge status={o.triggerState === 'PENDING' ? 'PENDING' : o.status} /> });
+    cols.push({
+      key: 'status',
+      header: 'Status',
+      align: 'right',
+      render: (o) => <StatusBadge status={o.triggerState === 'PENDING' ? 'PENDING' : o.status} />,
+    });
     cols.push({
       key: 'cancel',
       header: '',
@@ -141,8 +214,23 @@ export function OpenOrdersTable({ marketType, symbol }: { marketType: MarketType
     },
     onError: (e) => toast.error('Cancel failed', errorMessage(e)),
   });
-  const columns = useOrderColumns('open', markets, (o) => cancel.mutate(o), cancel.isPending ? (cancel.variables?.id ?? null) : null);
-  return <DataTable columns={columns} rows={rows} rowKey={(o) => o.id} loading={isLoading} error={error} onRetry={() => void refetch()} empty="No open orders" />;
+  const columns = useOrderColumns(
+    'open',
+    markets,
+    (o) => cancel.mutate(o),
+    cancel.isPending ? (cancel.variables?.id ?? null) : null,
+  );
+  return (
+    <DataTable
+      columns={columns}
+      rows={rows}
+      rowKey={(o) => o.id}
+      loading={isLoading}
+      error={error}
+      onRetry={() => void refetch()}
+      empty="No open orders"
+    />
+  );
 }
 
 export function CancelAllButton({ marketType, symbol }: { marketType: MarketType; symbol?: string }) {
@@ -172,7 +260,15 @@ export function CancelAllButton({ marketType, symbol }: { marketType: MarketType
   );
 }
 
-export function OrderHistoryTable({ marketType, symbol, pageSize = 50 }: { marketType?: MarketType; symbol?: string; pageSize?: number }) {
+export function OrderHistoryTable({
+  marketType,
+  symbol,
+  pageSize = 50,
+}: {
+  marketType?: MarketType;
+  symbol?: string;
+  pageSize?: number;
+}) {
   const authed = useAuthed();
   const markets = useMarketMap();
   const q = useInfiniteQuery({
@@ -193,12 +289,22 @@ export function OrderHistoryTable({ marketType, symbol, pageSize = 50 }: { marke
       error={q.error}
       onRetry={() => void q.refetch()}
       empty="No orders yet"
-      footer={q.hasNextPage ? <LoadMore onClick={() => void q.fetchNextPage()} loading={q.isFetchingNextPage} /> : undefined}
+      footer={
+        q.hasNextPage ? <LoadMore onClick={() => void q.fetchNextPage()} loading={q.isFetchingNextPage} /> : undefined
+      }
     />
   );
 }
 
-export function TradeHistoryTable({ marketType, symbol, pageSize = 50 }: { marketType?: MarketType; symbol?: string; pageSize?: number }) {
+export function TradeHistoryTable({
+  marketType,
+  symbol,
+  pageSize = 50,
+}: {
+  marketType?: MarketType;
+  symbol?: string;
+  pageSize?: number;
+}) {
   const authed = useAuthed();
   const markets = useMarketMap();
   const q = useInfiniteQuery({
@@ -211,14 +317,44 @@ export function TradeHistoryTable({ marketType, symbol, pageSize = 50 }: { marke
   const columns: Column<FillDto>[] = [
     { key: 'time', header: 'Time', render: (f) => <span className="muted num">{fmtDateTime(f.ts)}</span> },
     { key: 'symbol', header: 'Pair', render: (f) => <strong>{f.symbol}</strong> },
-    { key: 'side', header: 'Side', render: (f) => <span className={f.side === 'BUY' ? 'up' : 'down'}>{f.side === 'BUY' ? 'Buy' : 'Sell'}</span> },
-    { key: 'price', header: 'Price', align: 'right', render: (f) => <span className="num">{fmtPrice(f.price, markets.get(f.symbol))}</span> },
-    { key: 'qty', header: 'Quantity', align: 'right', render: (f) => <span className="num">{fmtQty(f.qty, markets.get(f.symbol))}</span> },
-    { key: 'total', header: 'Total', align: 'right', render: (f) => <span className="num">{formatNumber(f.quoteQty, 2)}</span> },
-    { key: 'fee', header: 'Fee', align: 'right', render: (f) => <span className="num muted">{`${formatNumber(f.fee, 8, { trim: true })} ${f.feeAsset}`}</span> },
-    { key: 'role', header: 'Role', align: 'right', render: (f) => <span className="faint">{f.isMaker ? 'Maker' : 'Taker'}</span> },
+    {
+      key: 'side',
+      header: 'Side',
+      render: (f) => <span className={f.side === 'BUY' ? 'up' : 'down'}>{f.side === 'BUY' ? 'Buy' : 'Sell'}</span>,
+    },
+    {
+      key: 'price',
+      header: 'Price',
+      align: 'right',
+      render: (f) => <span className="num">{fmtPrice(f.price, markets.get(f.symbol))}</span>,
+    },
+    {
+      key: 'qty',
+      header: 'Quantity',
+      align: 'right',
+      render: (f) => <span className="num">{fmtQty(f.qty, markets.get(f.symbol))}</span>,
+    },
+    {
+      key: 'total',
+      header: 'Total',
+      align: 'right',
+      render: (f) => <span className="num">{formatNumber(f.quoteQty, 2)}</span>,
+    },
+    {
+      key: 'fee',
+      header: 'Fee',
+      align: 'right',
+      render: (f) => <span className="num muted">{`${formatNumber(f.fee, 8, { trim: true })} ${f.feeAsset}`}</span>,
+    },
+    {
+      key: 'role',
+      header: 'Role',
+      align: 'right',
+      render: (f) => <span className="faint">{f.isMaker ? 'Maker' : 'Taker'}</span>,
+    },
   ];
-  if (marketType !== 'SPOT') columns.push({ key: 'pnl', header: 'Realized PnL', align: 'right', render: (f) => <PnL value={f.realizedPnl} /> });
+  if (marketType !== 'SPOT')
+    columns.push({ key: 'pnl', header: 'Realized PnL', align: 'right', render: (f) => <PnL value={f.realizedPnl} /> });
   return (
     <DataTable
       columns={columns}
@@ -228,7 +364,9 @@ export function TradeHistoryTable({ marketType, symbol, pageSize = 50 }: { marke
       error={q.error}
       onRetry={() => void q.refetch()}
       empty="No trades yet"
-      footer={q.hasNextPage ? <LoadMore onClick={() => void q.fetchNextPage()} loading={q.isFetchingNextPage} /> : undefined}
+      footer={
+        q.hasNextPage ? <LoadMore onClick={() => void q.fetchNextPage()} loading={q.isFetchingNextPage} /> : undefined
+      }
     />
   );
 }
@@ -242,8 +380,18 @@ export function FundingHistoryTable() {
         { key: 't', header: 'Time', render: (f) => <span className="muted num">{fmtDateTime(f.fundingTime)}</span> },
         { key: 's', header: 'Contract', render: (f) => <strong>{f.symbol}</strong> },
         { key: 'q', header: 'Position', align: 'right', render: (f) => <span className="num">{f.positionQty}</span> },
-        { key: 'r', header: 'Rate', align: 'right', render: (f) => <span className="num">{D(f.rate).mul(100).toFixed(4)}%</span> },
-        { key: 'm', header: 'Mark price', align: 'right', render: (f) => <span className="num">{formatNumber(f.markPrice, 2)}</span> },
+        {
+          key: 'r',
+          header: 'Rate',
+          align: 'right',
+          render: (f) => <span className="num">{D(f.rate).mul(100).toFixed(4)}%</span>,
+        },
+        {
+          key: 'm',
+          header: 'Mark price',
+          align: 'right',
+          render: (f) => <span className="num">{formatNumber(f.markPrice, 2)}</span>,
+        },
         { key: 'a', header: 'Payment', align: 'right', render: (f) => <PnL value={f.amount} suffix="USDT" /> },
       ]}
       rows={q.data}
@@ -263,10 +411,30 @@ function SpotAssets({ market }: { market: MarketDto }) {
     <DataTable
       columns={[
         { key: 'a', header: 'Asset', render: (b) => <AssetLabel asset={b.asset} /> },
-        { key: 't', header: 'Total', align: 'right', render: (b) => <span className="num">{formatNumber(b.total, 8, { trim: true })}</span> },
-        { key: 'v', header: 'Available', align: 'right', render: (b) => <span className="num">{formatNumber(b.available, 8, { trim: true })}</span> },
-        { key: 'l', header: 'In orders', align: 'right', render: (b) => <span className="num muted">{formatNumber(b.locked, 8, { trim: true })}</span> },
-        { key: 'u', header: 'Value (USD)', align: 'right', render: (b) => <span className="num">${formatNumber(b.usdValue, 2)}</span> },
+        {
+          key: 't',
+          header: 'Total',
+          align: 'right',
+          render: (b) => <span className="num">{formatNumber(b.total, 8, { trim: true })}</span>,
+        },
+        {
+          key: 'v',
+          header: 'Available',
+          align: 'right',
+          render: (b) => <span className="num">{formatNumber(b.available, 8, { trim: true })}</span>,
+        },
+        {
+          key: 'l',
+          header: 'In orders',
+          align: 'right',
+          render: (b) => <span className="num muted">{formatNumber(b.locked, 8, { trim: true })}</span>,
+        },
+        {
+          key: 'u',
+          header: 'Value (USD)',
+          align: 'right',
+          render: (b) => <span className="num">${formatNumber(b.usdValue, 2)}</span>,
+        },
       ]}
       rows={rows}
       rowKey={(b) => b.asset}
@@ -321,13 +489,21 @@ export function OrdersPanel({ kind, market }: { kind: 'spot' | 'futures'; market
   const [tab, setTab] = useState<SpotTab | FuturesTab>(kind === 'futures' ? 'positions' : 'open');
   const [onlyThis, setOnlyThis] = useState(false);
   const { data: open } = useOpenOrders(marketType);
-  const { data: positions } = useQuery({ queryKey: ['positions', 'futures'], queryFn: () => api.futures.positions(), enabled: authed && kind === 'futures' });
+  const { data: positions } = useQuery({
+    queryKey: ['positions', 'futures'],
+    queryFn: () => api.futures.positions(),
+    enabled: authed && kind === 'futures',
+  });
   const symbol = onlyThis ? market.symbol : undefined;
   const openCount = (open ?? []).filter((o) => !symbol || o.symbol === symbol).length;
   const tabs =
     kind === 'futures'
       ? [
-          { value: 'positions' as const, label: 'Positions', count: (positions ?? []).filter((p) => !symbol || p.symbol === symbol).length },
+          {
+            value: 'positions' as const,
+            label: 'Positions',
+            count: (positions ?? []).filter((p) => !symbol || p.symbol === symbol).length,
+          },
           { value: 'open' as const, label: 'Open orders', count: openCount },
           { value: 'history' as const, label: 'Order history' },
           { value: 'trades' as const, label: 'Trade history' },

@@ -55,7 +55,15 @@ const Row = memo(function Row({
   );
 });
 
-export function OrderBook({ market, onPriceClick, rows = 16 }: { market: MarketDto; onPriceClick?: (price: string) => void; rows?: number }) {
+export function OrderBook({
+  market,
+  onPriceClick,
+  rows = 16,
+}: {
+  market: MarketDto;
+  onPriceClick?: (price: string) => void;
+  rows?: number;
+}) {
   const { data: book, loading } = useOrderBook(market.symbol);
   const { data: ticker } = useTicker(market.symbol);
   const [view, setView] = useState<View>('both');
@@ -70,10 +78,17 @@ export function OrderBook({ market, onPriceClick, rows = 16 }: { market: MarketD
     const b = group(book?.bids ?? [], isBase ? null : step, 'bid').slice(0, view === 'bids' ? rows * 2 : rows);
     const asksCum = cumulative(a);
     const bidsCum = cumulative(b);
-    const max = Math.max(Number(asksCum[asksCum.length - 1]?.total ?? 0), Number(bidsCum[bidsCum.length - 1]?.total ?? 0), 1e-12);
+    const max = Math.max(
+      Number(asksCum[asksCum.length - 1]?.total ?? 0),
+      Number(bidsCum[bidsCum.length - 1]?.total ?? 0),
+      1e-12,
+    );
     const bestAsk = a[0]?.[0];
     const bestBid = b[0]?.[0];
-    const sp = bestAsk && bestBid ? { abs: D(bestAsk).minus(bestBid), pct: D(bestAsk).minus(bestBid).div(bestAsk).mul(100) } : null;
+    const sp =
+      bestAsk && bestBid
+        ? { abs: D(bestAsk).minus(bestBid), pct: D(bestAsk).minus(bestBid).div(bestAsk).mul(100) }
+        : null;
     return { asks: asksCum, bids: bidsCum, maxTotal: max, spread: sp };
   }, [book, step, steps, view, rows]);
 
@@ -85,13 +100,25 @@ export function OrderBook({ market, onPriceClick, rows = 16 }: { market: MarketD
       <div className="ob__tools">
         <div className="ob__views" role="group" aria-label="Order book view">
           {(['both', 'bids', 'asks'] as View[]).map((v) => (
-            <button key={v} type="button" aria-pressed={view === v} onClick={() => setView(v)} aria-label={v} className={`ob__view ob__view--${v}`}>
+            <button
+              key={v}
+              type="button"
+              aria-pressed={view === v}
+              onClick={() => setView(v)}
+              aria-label={v}
+              className={`ob__view ob__view--${v}`}
+            >
               <i />
               <i />
             </button>
           ))}
         </div>
-        <select className="ob__step" value={step} onChange={(e) => setStep(market.symbol, e.target.value)} aria-label="Price grouping">
+        <select
+          className="ob__step"
+          value={step}
+          onChange={(e) => setStep(market.symbol, e.target.value)}
+          aria-label="Price grouping"
+        >
           {steps.map((s) => (
             <option key={s} value={s}>
               {s}
@@ -115,13 +142,26 @@ export function OrderBook({ market, onPriceClick, rows = 16 }: { market: MarketD
           {view !== 'bids' && (
             <div className="ob__side ob__side--asks">
               {[...asks].reverse().map((r) => (
-                <Row key={r.p} price={r.p} qty={r.q} total={r.total.toFixed()} depth={Number(r.total) / maxTotal} side="ask" market={market} onClick={onPriceClick} />
+                <Row
+                  key={r.p}
+                  price={r.p}
+                  qty={r.q}
+                  total={r.total.toFixed()}
+                  depth={Number(r.total) / maxTotal}
+                  side="ask"
+                  market={market}
+                  onClick={onPriceClick}
+                />
               ))}
             </div>
           )}
           <div className="ob__mid">
             <LivePrice value={last} text={fmtPrice(last, market)} className={`ob__last ${dir}`} />
-            {ticker?.markPrice && <span className="muted num" data-tip="Mark price">{fmtPrice(ticker.markPrice, market)}</span>}
+            {ticker?.markPrice && (
+              <span className="muted num" data-tip="Mark price">
+                {fmtPrice(ticker.markPrice, market)}
+              </span>
+            )}
             <span className="spacer" />
             {spread && (
               <span className="faint num" data-tip="Spread">
@@ -132,7 +172,16 @@ export function OrderBook({ market, onPriceClick, rows = 16 }: { market: MarketD
           {view !== 'asks' && (
             <div className="ob__side">
               {bids.map((r) => (
-                <Row key={r.p} price={r.p} qty={r.q} total={r.total.toFixed()} depth={Number(r.total) / maxTotal} side="bid" market={market} onClick={onPriceClick} />
+                <Row
+                  key={r.p}
+                  price={r.p}
+                  qty={r.q}
+                  total={r.total.toFixed()}
+                  depth={Number(r.total) / maxTotal}
+                  side="bid"
+                  market={market}
+                  onClick={onPriceClick}
+                />
               ))}
             </div>
           )}

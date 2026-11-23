@@ -7,7 +7,17 @@ export interface DonutItem {
 }
 
 /** Allocation ring drawn with stroke-dasharray segments. */
-export function Donut({ items, size = 168, thickness = 20, center }: { items: DonutItem[]; size?: number; thickness?: number; center?: React.ReactNode }) {
+export function Donut({
+  items,
+  size = 168,
+  thickness = 20,
+  center,
+}: {
+  items: DonutItem[];
+  size?: number;
+  thickness?: number;
+  center?: React.ReactNode;
+}) {
   const r = (size - thickness) / 2;
   const c = 2 * Math.PI * r;
   const lengths = items.map((it) => (Math.max(0, it.percent) / 100) * c);

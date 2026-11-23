@@ -1,11 +1,22 @@
-import type { LiquidationDto, MarketType, NotificationCategory, NotificationDto, OptionSettlementDto } from '@gocrypto/shared-types';
+import type {
+  LiquidationDto,
+  MarketType,
+  NotificationCategory,
+  NotificationDto,
+  OptionSettlementDto,
+} from '@gocrypto/shared-types';
 import { formatNumber, formatPercent } from '@gocrypto/trading-utils';
 import { Badge, Button, Card, DataTable, EmptyState, Icon, Tabs, cx, useToast } from '@gocrypto/ui';
 import { useInfiniteQuery, useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useState } from 'react';
 import { Link } from 'react-router';
 import { PnL } from '../components/common';
-import { FundingHistoryTable, OpenOrdersTable, OrderHistoryTable, TradeHistoryTable } from '../components/trading/OrdersPanel';
+import {
+  FundingHistoryTable,
+  OpenOrdersTable,
+  OrderHistoryTable,
+  TradeHistoryTable,
+} from '../components/trading/OrdersPanel';
 import { api, errorMessage } from '../lib/api';
 import { fmtDateTime, fmtPrice, humanize } from '../lib/format';
 import { useAssets, useAuthed, useMarkets } from '../lib/hooks';
@@ -17,14 +28,24 @@ export function OrdersPage() {
   const [type, setType] = useState<MarketType | 'ALL'>('ALL');
   const authed = useAuthed();
   const mt = type === 'ALL' ? undefined : type;
-  const liquidations = useQuery({ queryKey: ['liquidations'], queryFn: () => api.futures.liquidations(), enabled: authed && tab === 'liquidations' });
-  const settlements = useQuery({ queryKey: ['option-settlements'], queryFn: () => api.options.settlements(), enabled: authed && tab === 'settlements' });
+  const liquidations = useQuery({
+    queryKey: ['liquidations'],
+    queryFn: () => api.futures.liquidations(),
+    enabled: authed && tab === 'liquidations',
+  });
+  const settlements = useQuery({
+    queryKey: ['option-settlements'],
+    queryFn: () => api.options.settlements(),
+    enabled: authed && tab === 'settlements',
+  });
   return (
     <div className="page">
       <div className="page__head">
         <div>
           <h1>Orders &amp; trades</h1>
-          <p className="muted">Complete lifecycle of every order: NEW → OPEN → PARTIALLY_FILLED → FILLED, CANCELLED, REJECTED or EXPIRED.</p>
+          <p className="muted">
+            Complete lifecycle of every order: NEW → OPEN → PARTIALLY_FILLED → FILLED, CANCELLED, REJECTED or EXPIRED.
+          </p>
         </div>
       </div>
       <Card noPadding>
@@ -83,14 +104,37 @@ export function OrdersPage() {
             error={liquidations.error}
             empty="No liquidations — keep it that way with stop-losses and sensible leverage."
             columns={[
-              { key: 't', header: 'Time', render: (l) => <span className="muted num">{fmtDateTime(l.createdAt)}</span> },
+              {
+                key: 't',
+                header: 'Time',
+                render: (l) => <span className="muted num">{fmtDateTime(l.createdAt)}</span>,
+              },
               { key: 's', header: 'Contract', render: (l) => <strong>{l.symbol}</strong> },
-              { key: 'd', header: 'Side', render: (l) => <Badge tone={l.side === 'LONG' ? 'up' : 'down'}>{l.side}</Badge> },
-              { key: 'q', header: 'Quantity', align: 'right', render: (l) => <span className="num">{l.quantity}</span> },
-              { key: 'e', header: 'Entry / Mark', align: 'right', render: (l) => <span className="num">{`${fmtPrice(l.entryPrice)} / ${fmtPrice(l.markPrice)}`}</span> },
+              {
+                key: 'd',
+                header: 'Side',
+                render: (l) => <Badge tone={l.side === 'LONG' ? 'up' : 'down'}>{l.side}</Badge>,
+              },
+              {
+                key: 'q',
+                header: 'Quantity',
+                align: 'right',
+                render: (l) => <span className="num">{l.quantity}</span>,
+              },
+              {
+                key: 'e',
+                header: 'Entry / Mark',
+                align: 'right',
+                render: (l) => <span className="num">{`${fmtPrice(l.entryPrice)} / ${fmtPrice(l.markPrice)}`}</span>,
+              },
               { key: 'm', header: 'Mode', render: (l) => humanize(l.marginMode) },
               { key: 'l', header: 'Loss', align: 'right', render: (l) => <PnL value={`-${l.loss}`} suffix="USDT" /> },
-              { key: 'f', header: 'Liquidation fee', align: 'right', render: (l) => <span className="num muted">{formatNumber(l.fee, 4)}</span> },
+              {
+                key: 'f',
+                header: 'Liquidation fee',
+                align: 'right',
+                render: (l) => <span className="num muted">{formatNumber(l.fee, 4)}</span>,
+              },
             ]}
           />
         ) : (
@@ -101,11 +145,29 @@ export function OrdersPage() {
             error={settlements.error}
             empty="No expired option positions yet"
             columns={[
-              { key: 't', header: 'Settled', render: (s) => <span className="muted num">{fmtDateTime(s.createdAt)}</span> },
+              {
+                key: 't',
+                header: 'Settled',
+                render: (s) => <span className="muted num">{fmtDateTime(s.createdAt)}</span>,
+              },
               { key: 's', header: 'Contract', render: (s) => <strong>{s.symbol}</strong> },
-              { key: 'd', header: 'Side', render: (s) => <Badge tone={s.side === 'LONG' ? 'up' : 'down'}>{s.side}</Badge> },
-              { key: 'q', header: 'Quantity', align: 'right', render: (s) => <span className="num">{s.quantity}</span> },
-              { key: 'k', header: 'Strike / Settlement', align: 'right', render: (s) => <span className="num">{`${fmtPrice(s.strike)} / ${fmtPrice(s.settlementPrice)}`}</span> },
+              {
+                key: 'd',
+                header: 'Side',
+                render: (s) => <Badge tone={s.side === 'LONG' ? 'up' : 'down'}>{s.side}</Badge>,
+              },
+              {
+                key: 'q',
+                header: 'Quantity',
+                align: 'right',
+                render: (s) => <span className="num">{s.quantity}</span>,
+              },
+              {
+                key: 'k',
+                header: 'Strike / Settlement',
+                align: 'right',
+                render: (s) => <span className="num">{`${fmtPrice(s.strike)} / ${fmtPrice(s.settlementPrice)}`}</span>,
+              },
               { key: 'p', header: 'Payout', align: 'right', render: (s) => <PnL value={s.payout} suffix="USDT" /> },
             ]}
           />
@@ -216,7 +278,10 @@ export function FeesPage() {
       <div className="page__head">
         <div>
           <h1>Fees</h1>
-          <p className="muted">Base trading fees per product. VIP tiers and individual rates are configured by the exchange and applied automatically at execution.</p>
+          <p className="muted">
+            Base trading fees per product. VIP tiers and individual rates are configured by the exchange and applied
+            automatically at execution.
+          </p>
         </div>
       </div>
       <div className="stats-grid">
@@ -247,10 +312,30 @@ export function FeesPage() {
           columns={[
             { key: 'a', header: 'Coin', render: (r) => <strong>{r.a.symbol}</strong> },
             { key: 'n', header: 'Network', render: (r) => r.n.name },
-            { key: 'f', header: 'Withdrawal fee', align: 'right', render: (r) => <span className="num">{formatNumber(r.n.withdrawalFee, 8, { trim: true })}</span> },
-            { key: 'm', header: 'Min. withdrawal', align: 'right', render: (r) => <span className="num">{formatNumber(r.n.minWithdrawal, 8, { trim: true })}</span> },
-            { key: 'd', header: 'Min. deposit', align: 'right', render: (r) => <span className="num">{formatNumber(r.n.minDeposit, 8, { trim: true })}</span> },
-            { key: 'c', header: 'Confirmations', align: 'right', render: (r) => <span className="num">{r.n.confirmations}</span> },
+            {
+              key: 'f',
+              header: 'Withdrawal fee',
+              align: 'right',
+              render: (r) => <span className="num">{formatNumber(r.n.withdrawalFee, 8, { trim: true })}</span>,
+            },
+            {
+              key: 'm',
+              header: 'Min. withdrawal',
+              align: 'right',
+              render: (r) => <span className="num">{formatNumber(r.n.minWithdrawal, 8, { trim: true })}</span>,
+            },
+            {
+              key: 'd',
+              header: 'Min. deposit',
+              align: 'right',
+              render: (r) => <span className="num">{formatNumber(r.n.minDeposit, 8, { trim: true })}</span>,
+            },
+            {
+              key: 'c',
+              header: 'Confirmations',
+              align: 'right',
+              render: (r) => <span className="num">{r.n.confirmations}</span>,
+            },
           ]}
         />
       </Card>

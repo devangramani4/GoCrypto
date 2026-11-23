@@ -47,7 +47,17 @@ export function DecimalInput({
 }
 
 /** 0-100% allocation slider with quick marks. */
-export function PercentSlider({ value, onChange, disabled, tone }: { value: number; onChange: (v: number) => void; disabled?: boolean; tone?: 'up' | 'down' }) {
+export function PercentSlider({
+  value,
+  onChange,
+  disabled,
+  tone,
+}: {
+  value: number;
+  onChange: (v: number) => void;
+  disabled?: boolean;
+  tone?: 'up' | 'down';
+}) {
   return (
     <div className={cx('pct', tone && `pct--${tone}`)}>
       <input
@@ -64,7 +74,13 @@ export function PercentSlider({ value, onChange, disabled, tone }: { value: numb
       />
       <div className="pct__marks">
         {[0, 25, 50, 75, 100].map((m) => (
-          <button key={m} type="button" className={cx('pct__mark', value >= m && 'on')} onClick={() => onChange(m)} disabled={disabled}>
+          <button
+            key={m}
+            type="button"
+            className={cx('pct__mark', value >= m && 'on')}
+            onClick={() => onChange(m)}
+            disabled={disabled}
+          >
             {m}%
           </button>
         ))}

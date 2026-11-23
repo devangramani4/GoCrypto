@@ -62,8 +62,24 @@ describe('Portfolio', () => {
     signIn();
     mockApi.portfolio.summary.mockResolvedValue(SUMMARY);
     mockApi.portfolio.holdings.mockResolvedValue([
-      { asset: 'BTC', quantity: '0.2', available: '0.2', locked: '0', price: '50000', usdValue: '10000', change24h: '0.0125' },
-      { asset: 'USDT', quantity: '2345.67', available: '2000', locked: '345.67', price: '1', usdValue: '2345.67', change24h: '0' },
+      {
+        asset: 'BTC',
+        quantity: '0.2',
+        available: '0.2',
+        locked: '0',
+        price: '50000',
+        usdValue: '10000',
+        change24h: '0.0125',
+      },
+      {
+        asset: 'USDT',
+        quantity: '2345.67',
+        available: '2000',
+        locked: '345.67',
+        price: '1',
+        usdValue: '2345.67',
+        change24h: '0',
+      },
     ]);
     mockApi.portfolio.allocation.mockResolvedValue([
       { asset: 'BTC', value: '10000', percent: '0.81' },

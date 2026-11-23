@@ -40,7 +40,13 @@ export function Modal({
   if (!open) return null;
   return createPortal(
     <div className="gc-modal-backdrop" onMouseDown={(e) => e.target === e.currentTarget && onClose()}>
-      <div ref={ref} className={cx('gc-modal', wide && 'gc-modal--wide')} role="dialog" aria-modal="true" aria-label={typeof title === 'string' ? title : undefined}>
+      <div
+        ref={ref}
+        className={cx('gc-modal', wide && 'gc-modal--wide')}
+        role="dialog"
+        aria-modal="true"
+        aria-label={typeof title === 'string' ? title : undefined}
+      >
         <div className="gc-modal__head">
           <h2 className="gc-modal__title">{title}</h2>
           <IconButton icon="x" label="Close" onClick={onClose} />
@@ -98,17 +104,32 @@ export function ToastProvider({ children }: { children: ReactNode }) {
         createPortal(
           <div className="gc-toasts" aria-live="polite">
             {items.map((t) => (
-              <div key={t.id} className={cx('gc-toast', `gc-toast--${t.tone}`)} role={t.tone === 'error' ? 'alert' : 'status'}>
+              <div
+                key={t.id}
+                className={cx('gc-toast', `gc-toast--${t.tone}`)}
+                role={t.tone === 'error' ? 'alert' : 'status'}
+              >
                 <Icon
                   name={t.tone === 'success' ? 'check' : t.tone === 'error' ? 'alert' : 'info'}
                   size={16}
-                  style={{ color: t.tone === 'success' ? 'var(--c-up)' : t.tone === 'error' ? 'var(--c-down)' : 'var(--c-brand)', flexShrink: 0, marginTop: 2 }}
+                  style={{
+                    color:
+                      t.tone === 'success' ? 'var(--c-up)' : t.tone === 'error' ? 'var(--c-down)' : 'var(--c-brand)',
+                    flexShrink: 0,
+                    marginTop: 2,
+                  }}
                 />
                 <div style={{ flex: 1 }}>
                   <div className="gc-toast__title">{t.title}</div>
                   {t.body && <div className="gc-toast__body">{t.body}</div>}
                 </div>
-                <IconButton icon="x" label="Dismiss" size={14} onClick={() => dismiss(t.id)} style={{ width: 22, height: 22 }} />
+                <IconButton
+                  icon="x"
+                  label="Dismiss"
+                  size={14}
+                  onClick={() => dismiss(t.id)}
+                  style={{ width: 22, height: 22 }}
+                />
               </div>
             ))}
           </div>,

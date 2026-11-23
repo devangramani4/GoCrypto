@@ -19,7 +19,9 @@ export function RecentTrades({ market }: { market: MarketDto }) {
       </div>
       <div className="trades__list">
         {!trades
-          ? Array.from({ length: 12 }, (_, i) => <Skeleton key={i} height={12} style={{ margin: '6px 10px', width: 'auto' }} />)
+          ? Array.from({ length: 12 }, (_, i) => (
+              <Skeleton key={i} height={12} style={{ margin: '6px 10px', width: 'auto' }} />
+            ))
           : trades.map((t) => (
               <div key={t.id} className="trades__row num">
                 <span className={t.side === 'BUY' ? 'up' : 'down'}>{fmtPrice(t.price, market)}</span>
@@ -42,14 +44,22 @@ export function MarketHeader({ market, kind }: { market: MarketDto; kind: 'spot'
   const { data: t } = useTicker(market.symbol);
   const stats: [string, React.ReactNode][] = [];
   if (t) {
-    stats.push(['24h Change', <span key="c" className={D(t.priceChange).gte(0) ? 'up' : 'down'}>{`${D(t.priceChange).gte(0) ? '+' : ''}${fmtPrice(t.priceChange, market)} ${formatPercent(t.priceChangePercent)}`}</span>]);
+    stats.push([
+      '24h Change',
+      <span
+        key="c"
+        className={D(t.priceChange).gte(0) ? 'up' : 'down'}
+      >{`${D(t.priceChange).gte(0) ? '+' : ''}${fmtPrice(t.priceChange, market)} ${formatPercent(t.priceChangePercent)}`}</span>,
+    ]);
     if (kind === 'futures') {
       stats.push(['Mark', fmtPrice(t.markPrice ?? null, market)]);
       stats.push(['Index', fmtPrice(t.indexPrice ?? null, market)]);
       stats.push([
         'Funding / Countdown',
         <span key="f">
-          <span className={D(t.fundingRate ?? 0).gte(0) ? 'warn' : 'up'}>{t.fundingRate ? `${D(t.fundingRate).mul(100).toFixed(4)}%` : '—'}</span>
+          <span className={D(t.fundingRate ?? 0).gte(0) ? 'warn' : 'up'}>
+            {t.fundingRate ? `${D(t.fundingRate).mul(100).toFixed(4)}%` : '—'}
+          </span>
           {' / '}
           {t.nextFundingTime ? <FundingCountdown next={t.nextFundingTime} /> : '—'}
         </span>,
@@ -65,7 +75,11 @@ export function MarketHeader({ market, kind }: { market: MarketDto; kind: 'spot'
     <div className="mkt-head">
       <MarketSelector market={market} kind={kind} />
       <div className="mkt-head__price">
-        <LivePrice value={t?.lastPrice} text={t ? fmtPrice(t.lastPrice, market) : '—'} className={cx('mkt-head__last', t && (D(t.priceChange).gte(0) ? 'up' : 'down'))} />
+        <LivePrice
+          value={t?.lastPrice}
+          text={t ? fmtPrice(t.lastPrice, market) : '—'}
+          className={cx('mkt-head__last', t && (D(t.priceChange).gte(0) ? 'up' : 'down'))}
+        />
         <span className="faint num" style={{ fontSize: 11 }}>
           {t ? `≈ $${fmtPrice(t.lastPrice, market)}` : ''}
         </span>
@@ -107,7 +121,11 @@ export function MarketSelector({ market, kind }: { market: MarketDto; kind: 'spo
       </button>
       {open && (
         <div className="mkt-sel__pop">
-          <MarketList type={kind === 'futures' ? 'FUTURES' : 'SPOT'} onSelect={() => setOpen(false)} active={market.symbol} />
+          <MarketList
+            type={kind === 'futures' ? 'FUTURES' : 'SPOT'}
+            onSelect={() => setOpen(false)}
+            active={market.symbol}
+          />
         </div>
       )}
     </div>
@@ -115,7 +133,17 @@ export function MarketSelector({ market, kind }: { market: MarketDto; kind: 'spo
 }
 
 /** Searchable market list (selector popover and the desktop market panel). */
-export function MarketList({ type, active, onSelect, compact }: { type: MarketType; active?: string; onSelect?: (symbol: string) => void; compact?: boolean }) {
+export function MarketList({
+  type,
+  active,
+  onSelect,
+  compact,
+}: {
+  type: MarketType;
+  active?: string;
+  onSelect?: (symbol: string) => void;
+  compact?: boolean;
+}) {
   const { data: markets } = useMarkets(type);
   const { data: tickers } = useTickers(type);
   const navigate = useNavigate();
@@ -155,7 +183,14 @@ export function MarketList({ type, active, onSelect, compact }: { type: MarketTy
         {rows.map((m) => {
           const t: TickerDto | undefined = tmap.get(m.symbol);
           return (
-            <div key={m.symbol} className={cx('mlist__row', active === m.symbol && 'active')} onClick={() => go(m.symbol)} role="button" tabIndex={0} onKeyDown={(e) => e.key === 'Enter' && go(m.symbol)}>
+            <div
+              key={m.symbol}
+              className={cx('mlist__row', active === m.symbol && 'active')}
+              onClick={() => go(m.symbol)}
+              role="button"
+              tabIndex={0}
+              onKeyDown={(e) => e.key === 'Enter' && go(m.symbol)}
+            >
               <button
                 type="button"
                 className={cx('mlist__star', favorites.includes(m.symbol) && 'on')}

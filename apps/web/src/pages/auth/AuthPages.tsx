@@ -16,7 +16,9 @@ function useOnAuthenticated() {
   const qc = useQueryClient();
   const setUser = useSession((s) => s.setUser);
   return (user: UserDto) => {
-    qc.removeQueries({ predicate: (q) => !['markets', 'assets', 'tickers', 'system-status'].includes(String(q.queryKey[0])) });
+    qc.removeQueries({
+      predicate: (q) => !['markets', 'assets', 'tickers', 'system-status'].includes(String(q.queryKey[0])),
+    });
     setUser(user);
     realtime.reconnect();
   };
@@ -31,7 +33,17 @@ function zodErrors(error: { issues: { path: PropertyKey[]; message: string }[] }
   return out;
 }
 
-function AuthLayout({ title, subtitle, children, footer }: { title: string; subtitle?: ReactNode; children: ReactNode; footer?: ReactNode }) {
+function AuthLayout({
+  title,
+  subtitle,
+  children,
+  footer,
+}: {
+  title: string;
+  subtitle?: ReactNode;
+  children: ReactNode;
+  footer?: ReactNode;
+}) {
   const { data: tickers } = useTickers('SPOT');
   const featured = ['BTCUSDT', 'ETHUSDT', 'SOLUSDT'].map((s) => tickers?.find((t) => t.symbol === s)).filter(Boolean);
   return (
@@ -42,7 +54,10 @@ function AuthLayout({ title, subtitle, children, footer }: { title: string; subt
         </Link>
         <div>
           <h2>Spot, perpetuals and options — one account, one risk engine.</h2>
-          <p className="muted">Price-time priority matching, real-time margin checks and full audit trails. Practice risk-free in the sandbox with simulated funds.</p>
+          <p className="muted">
+            Price-time priority matching, real-time margin checks and full audit trails. Practice risk-free in the
+            sandbox with simulated funds.
+          </p>
         </div>
         <div className="auth__tickers">
           {featured.map((t) => (
@@ -112,7 +127,9 @@ export function LoginPage() {
     setError(null);
     setBusy(true);
     try {
-      const res = await api.auth.loginMfa(useBackup ? { mfaToken: mfa.token, backupCode: code.trim() } : { mfaToken: mfa.token, code: code.trim() });
+      const res = await api.auth.loginMfa(
+        useBackup ? { mfaToken: mfa.token, backupCode: code.trim() } : { mfaToken: mfa.token, code: code.trim() },
+      );
       if (res.status === 'OK') onAuthed(res.user);
     } catch (err) {
       setError(errorMessage(err));
@@ -124,19 +141,33 @@ export function LoginPage() {
 
   if (mfa) {
     return (
-      <AuthLayout title="Two-factor authentication" subtitle={useBackup ? 'Enter one of your backup codes.' : 'Enter the 6-digit code from your authenticator app.'}>
+      <AuthLayout
+        title="Two-factor authentication"
+        subtitle={useBackup ? 'Enter one of your backup codes.' : 'Enter the 6-digit code from your authenticator app.'}
+      >
         <form onSubmit={submitMfa} className="col" style={{ gap: 14 }} noValidate>
           <TextInput
             label={useBackup ? 'Backup code' : 'Authentication code'}
             value={code}
-            onChange={(e) => setCode(useBackup ? e.target.value.toUpperCase().slice(0, 9) : e.target.value.replace(/\D/g, '').slice(0, 6))}
+            onChange={(e) =>
+              setCode(
+                useBackup ? e.target.value.toUpperCase().slice(0, 9) : e.target.value.replace(/\D/g, '').slice(0, 6),
+              )
+            }
             inputMode={useBackup ? 'text' : 'numeric'}
             autoComplete="one-time-code"
             autoFocus
             className="otp-input"
           />
           {error && <Alert tone="error">{error}</Alert>}
-          <Button type="submit" variant="primary" size="lg" block loading={busy} disabled={useBackup ? code.length < 8 : code.length !== 6}>
+          <Button
+            type="submit"
+            variant="primary"
+            size="lg"
+            block
+            loading={busy}
+            disabled={useBackup ? code.length < 8 : code.length !== 6}
+          >
             Verify
           </Button>
           <button type="button" className="link-btn" onClick={() => (setUseBackup((b) => !b), setCode(''))}>
@@ -156,12 +187,20 @@ export function LoginPage() {
       subtitle="Welcome back. Make sure you are on the official GoCrypto domain."
       footer={
         <>
-          New to GoCrypto? <Link to={`/register${next ? `?next=${encodeURIComponent(next)}` : ''}`}>Create an account</Link>
+          New to GoCrypto?{' '}
+          <Link to={`/register${next ? `?next=${encodeURIComponent(next)}` : ''}`}>Create an account</Link>
         </>
       }
     >
       <form onSubmit={submit} className="col" style={{ gap: 14 }} noValidate>
-        <TextInput label="Email" type="email" autoComplete="username" value={email} onChange={(e) => setEmail(e.target.value)} autoFocus />
+        <TextInput
+          label="Email"
+          type="email"
+          autoComplete="username"
+          value={email}
+          onChange={(e) => setEmail(e.target.value)}
+          autoFocus
+        />
         <TextInput
           label="Password"
           labelRight={<Link to="/forgot-password">Forgot password?</Link>}
@@ -170,7 +209,12 @@ export function LoginPage() {
           value={password}
           onChange={(e) => setPassword(e.target.value)}
           suffix={
-            <button type="button" className="gc-icon-btn" aria-label={showPw ? 'Hide password' : 'Show password'} onClick={() => setShowPw((s) => !s)}>
+            <button
+              type="button"
+              className="gc-icon-btn"
+              aria-label={showPw ? 'Hide password' : 'Show password'}
+              onClick={() => setShowPw((s) => !s)}
+            >
               <Icon name={showPw ? 'eyeOff' : 'eye'} size={15} />
             </button>
           }
@@ -198,7 +242,13 @@ export function RegisterPage() {
   const [params] = useSearchParams();
   const onAuthed = useOnAuthenticated();
   const navigate = useNavigate();
-  const [form, setForm] = useState({ displayName: '', email: '', password: '', confirm: '', referralCode: params.get('ref') ?? '' });
+  const [form, setForm] = useState({
+    displayName: '',
+    email: '',
+    password: '',
+    confirm: '',
+    referralCode: params.get('ref') ?? '',
+  });
   const [accept, setAccept] = useState(false);
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [busy, setBusy] = useState(false);
@@ -227,7 +277,9 @@ export function RegisterPage() {
       onAuthed(res.user);
       navigate(params.get('next') ?? '/dashboard?welcome=1', { replace: true });
     } catch (err) {
-      setErrors(err instanceof ApiError && Object.keys(err.fieldErrors()).length ? err.fieldErrors() : { _: errorMessage(err) });
+      setErrors(
+        err instanceof ApiError && Object.keys(err.fieldErrors()).length ? err.fieldErrors() : { _: errorMessage(err) },
+      );
     } finally {
       setBusy(false);
     }
@@ -244,10 +296,30 @@ export function RegisterPage() {
       }
     >
       <form onSubmit={submit} className="col" style={{ gap: 12 }} noValidate>
-        <TextInput label="Display name (optional)" value={form.displayName} onChange={set('displayName')} error={errors.displayName} autoComplete="nickname" />
-        <TextInput label="Email" type="email" value={form.email} onChange={set('email')} error={errors.email} autoComplete="email" />
+        <TextInput
+          label="Display name (optional)"
+          value={form.displayName}
+          onChange={set('displayName')}
+          error={errors.displayName}
+          autoComplete="nickname"
+        />
+        <TextInput
+          label="Email"
+          type="email"
+          value={form.email}
+          onChange={set('email')}
+          error={errors.email}
+          autoComplete="email"
+        />
         <div>
-          <TextInput label="Password" type="password" value={form.password} onChange={set('password')} error={errors.password} autoComplete="new-password" />
+          <TextInput
+            label="Password"
+            type="password"
+            value={form.password}
+            onChange={set('password')}
+            error={errors.password}
+            autoComplete="new-password"
+          />
           {form.password && (
             <div className="pw-meter" aria-live="polite">
               <div className="pw-meter__bars">
@@ -259,10 +331,23 @@ export function RegisterPage() {
             </div>
           )}
         </div>
-        <TextInput label="Confirm password" type="password" value={form.confirm} onChange={set('confirm')} error={errors.confirm} autoComplete="new-password" />
-        <TextInput label="Referral code (optional)" value={form.referralCode} onChange={(e) => setForm((f) => ({ ...f, referralCode: e.target.value.toUpperCase() }))} error={errors.referralCode} />
+        <TextInput
+          label="Confirm password"
+          type="password"
+          value={form.confirm}
+          onChange={set('confirm')}
+          error={errors.confirm}
+          autoComplete="new-password"
+        />
+        <TextInput
+          label="Referral code (optional)"
+          value={form.referralCode}
+          onChange={(e) => setForm((f) => ({ ...f, referralCode: e.target.value.toUpperCase() }))}
+          error={errors.referralCode}
+        />
         <Checkbox checked={accept} onChange={(v) => (setAccept(v), setErrors((x) => ({ ...x, acceptTerms: '' })))}>
-          I accept the Terms of Use and Privacy Notice, and understand that crypto trading — especially with leverage — carries a high risk of loss.
+          I accept the Terms of Use and Privacy Notice, and understand that crypto trading — especially with leverage —
+          carries a high risk of loss.
         </Checkbox>
         {errors.acceptTerms && <div className="gc-field__error">{errors.acceptTerms}</div>}
         {errors._ && <Alert tone="error">{errors._}</Alert>}
@@ -318,14 +403,25 @@ export function ForgotPasswordPage() {
   return (
     <AuthLayout
       title={step === 'request' ? 'Reset your password' : 'Choose a new password'}
-      subtitle={step === 'request' ? 'We will email you a 6-digit verification code.' : `If an account exists for ${email}, a code is on its way. Withdrawals are locked for 24h after a reset.`}
+      subtitle={
+        step === 'request'
+          ? 'We will email you a 6-digit verification code.'
+          : `If an account exists for ${email}, a code is on its way. Withdrawals are locked for 24h after a reset.`
+      }
       footer={<Link to="/login">← Back to login</Link>}
     >
       {done ? (
         <Alert tone="info">Password updated. All sessions were signed out — redirecting to login…</Alert>
       ) : step === 'request' ? (
         <form onSubmit={request} className="col" style={{ gap: 14 }} noValidate>
-          <TextInput label="Email" type="email" value={email} onChange={(e) => setEmail(e.target.value)} error={errors.email} autoFocus />
+          <TextInput
+            label="Email"
+            type="email"
+            value={email}
+            onChange={(e) => setEmail(e.target.value)}
+            error={errors.email}
+            autoFocus
+          />
           {errors._ && <Alert tone="error">{errors._}</Alert>}
           <Button type="submit" variant="primary" size="lg" block loading={busy}>
             Send code
@@ -333,8 +429,23 @@ export function ForgotPasswordPage() {
         </form>
       ) : (
         <form onSubmit={reset} className="col" style={{ gap: 14 }} noValidate>
-          <TextInput label="Verification code" value={code} onChange={(e) => setCode(e.target.value.replace(/\D/g, '').slice(0, 6))} error={errors.code} inputMode="numeric" autoComplete="one-time-code" autoFocus />
-          <TextInput label="New password" type="password" value={password} onChange={(e) => setPassword(e.target.value)} error={errors.newPassword} autoComplete="new-password" />
+          <TextInput
+            label="Verification code"
+            value={code}
+            onChange={(e) => setCode(e.target.value.replace(/\D/g, '').slice(0, 6))}
+            error={errors.code}
+            inputMode="numeric"
+            autoComplete="one-time-code"
+            autoFocus
+          />
+          <TextInput
+            label="New password"
+            type="password"
+            value={password}
+            onChange={(e) => setPassword(e.target.value)}
+            error={errors.newPassword}
+            autoComplete="new-password"
+          />
           {errors._ && <Alert tone="error">{errors._}</Alert>}
           <Button type="submit" variant="primary" size="lg" block loading={busy}>
             Update password

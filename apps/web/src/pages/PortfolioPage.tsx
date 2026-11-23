@@ -31,25 +31,76 @@ export function OptionPositionsTable() {
         </span>
       ),
     },
-    { key: 'k', header: 'Strike / Expiry', render: (p) => <span className="num">{`${formatNumber(p.strike, 0)} · ${fmtDateTime(p.expiry)}`}</span> },
-    { key: 'q', header: 'Qty', align: 'right', render: (p) => <span className="num">{formatNumber(p.quantity, 4, { trim: true })}</span> },
-    { key: 'a', header: 'Avg / Mark', align: 'right', render: (p) => <span className="num">{`${fmtPrice(p.avgPrice)} / ${fmtPrice(p.markPrice)}`}</span> },
-    { key: 'g', header: 'Δ / Θ', align: 'right', render: (p) => <span className="num muted">{`${p.greeks.delta.toFixed(3)} / ${p.greeks.theta.toFixed(2)}`}</span> },
-    { key: 'm', header: 'Margin', align: 'right', render: (p) => <span className="num">{formatNumber(p.margin, 2)}</span> },
+    {
+      key: 'k',
+      header: 'Strike / Expiry',
+      render: (p) => <span className="num">{`${formatNumber(p.strike, 0)} · ${fmtDateTime(p.expiry)}`}</span>,
+    },
+    {
+      key: 'q',
+      header: 'Qty',
+      align: 'right',
+      render: (p) => <span className="num">{formatNumber(p.quantity, 4, { trim: true })}</span>,
+    },
+    {
+      key: 'a',
+      header: 'Avg / Mark',
+      align: 'right',
+      render: (p) => <span className="num">{`${fmtPrice(p.avgPrice)} / ${fmtPrice(p.markPrice)}`}</span>,
+    },
+    {
+      key: 'g',
+      header: 'Δ / Θ',
+      align: 'right',
+      render: (p) => <span className="num muted">{`${p.greeks.delta.toFixed(3)} / ${p.greeks.theta.toFixed(2)}`}</span>,
+    },
+    {
+      key: 'm',
+      header: 'Margin',
+      align: 'right',
+      render: (p) => <span className="num">{formatNumber(p.margin, 2)}</span>,
+    },
     { key: 'u', header: 'Unrealized PnL', align: 'right', render: (p) => <PnL value={p.unrealizedPnl} /> },
     { key: 'r', header: 'Realized', align: 'right', render: (p) => <PnL value={p.realizedPnl} /> },
   ];
-  return <DataTable columns={columns} rows={q.data} rowKey={(p) => p.symbol} loading={q.isLoading} error={q.error} onRetry={() => void q.refetch()} empty="No option positions" />;
+  return (
+    <DataTable
+      columns={columns}
+      rows={q.data}
+      rowKey={(p) => p.symbol}
+      loading={q.isLoading}
+      error={q.error}
+      onRetry={() => void q.refetch()}
+      empty="No option positions"
+    />
+  );
 }
 
 export function PortfolioPage() {
   const authed = useAuthed();
   const [range, setRange] = useState<Range>('30d');
   const [posTab, setPosTab] = useState<'futures' | 'options'>('futures');
-  const summary = useQuery({ queryKey: ['portfolio', 'summary'], queryFn: () => api.portfolio.summary(), enabled: authed, refetchInterval: 30_000 });
-  const perf = useQuery({ queryKey: ['portfolio', 'performance', range], queryFn: () => api.portfolio.performance(range), enabled: authed });
-  const alloc = useQuery({ queryKey: ['portfolio', 'allocation'], queryFn: () => api.portfolio.allocation(), enabled: authed });
-  const holdings = useQuery({ queryKey: ['portfolio', 'holdings'], queryFn: () => api.portfolio.holdings(), enabled: authed });
+  const summary = useQuery({
+    queryKey: ['portfolio', 'summary'],
+    queryFn: () => api.portfolio.summary(),
+    enabled: authed,
+    refetchInterval: 30_000,
+  });
+  const perf = useQuery({
+    queryKey: ['portfolio', 'performance', range],
+    queryFn: () => api.portfolio.performance(range),
+    enabled: authed,
+  });
+  const alloc = useQuery({
+    queryKey: ['portfolio', 'allocation'],
+    queryFn: () => api.portfolio.allocation(),
+    enabled: authed,
+  });
+  const holdings = useQuery({
+    queryKey: ['portfolio', 'holdings'],
+    queryFn: () => api.portfolio.holdings(),
+    enabled: authed,
+  });
   const s = summary.data;
   const series = perf.data ?? [];
   const change = series.length > 1 ? D(series[series.length - 1]!.value).minus(series[0]!.value) : null;
@@ -72,16 +123,47 @@ export function PortfolioPage() {
 
       <div className="stats-grid stats-grid--4">
         <Card>
-          <Stat label="Total value" icon="wallet" loading={summary.isLoading} value={s ? formatUsd(s.totalValue) : '—'} sub={s ? `Available ${formatUsd(s.availableBalance)}` : undefined} />
+          <Stat
+            label="Total value"
+            icon="wallet"
+            loading={summary.isLoading}
+            value={s ? formatUsd(s.totalValue) : '—'}
+            sub={s ? `Available ${formatUsd(s.availableBalance)}` : undefined}
+          />
         </Card>
         <Card>
-          <Stat label="Today's PnL" icon="trendUp" loading={summary.isLoading} value={s ? <PnL value={s.todayPnl} suffix="USD" /> : '—'} sub={s ? formatPercent(s.todayPnlPercent) : undefined} subTone={s && D(s.todayPnlPercent).lt(0) ? 'down' : 'up'} />
+          <Stat
+            label="Today's PnL"
+            icon="trendUp"
+            loading={summary.isLoading}
+            value={s ? <PnL value={s.todayPnl} suffix="USD" /> : '—'}
+            sub={s ? formatPercent(s.todayPnlPercent) : undefined}
+            subTone={s && D(s.todayPnlPercent).lt(0) ? 'down' : 'up'}
+          />
         </Card>
         <Card>
-          <Stat label="Unrealized / realized PnL" icon="activity" loading={summary.isLoading} value={s ? <PnL value={s.unrealizedPnl} /> : '—'} sub={s ? <>Realized <PnL value={s.realizedPnl} /></> : undefined} />
+          <Stat
+            label="Unrealized / realized PnL"
+            icon="activity"
+            loading={summary.isLoading}
+            value={s ? <PnL value={s.unrealizedPnl} /> : '—'}
+            sub={
+              s ? (
+                <>
+                  Realized <PnL value={s.realizedPnl} />
+                </>
+              ) : undefined
+            }
+          />
         </Card>
         <Card>
-          <Stat label="ROI" icon="pie" loading={summary.isLoading} value={s ? <span className={D(s.roi).gte(0) ? 'up' : 'down'}>{formatPercent(s.roi)}</span> : '—'} sub={s ? `In ${formatUsd(s.totalDeposits)} · Out ${formatUsd(s.totalWithdrawals)}` : undefined} />
+          <Stat
+            label="ROI"
+            icon="pie"
+            loading={summary.isLoading}
+            value={s ? <span className={D(s.roi).gte(0) ? 'up' : 'down'}>{formatPercent(s.roi)}</span> : '—'}
+            sub={s ? `In ${formatUsd(s.totalDeposits)} · Out ${formatUsd(s.totalWithdrawals)}` : undefined}
+          />
         </Card>
       </div>
 
@@ -102,7 +184,13 @@ export function PortfolioPage() {
             />
           }
         >
-          {perf.isLoading ? <Skeleton height={260} /> : series.length > 1 ? <AreaChart points={series} height={260} tone={change && change.lt(0) ? 'down' : 'up'} /> : <div className="gc-state">Not enough history for this range yet.</div>}
+          {perf.isLoading ? (
+            <Skeleton height={260} />
+          ) : series.length > 1 ? (
+            <AreaChart points={series} height={260} tone={change && change.lt(0) ? 'down' : 'up'} />
+          ) : (
+            <div className="gc-state">Not enough history for this range yet.</div>
+          )}
         </Card>
         <Card title="Allocation">
           {alloc.isLoading ? (
@@ -147,7 +235,11 @@ export function PortfolioPage() {
                 <div key={a.label} className="acct-split__row">
                   <span className="muted">{a.label}</span>
                   <div className="acct-split__bar">
-                    <span style={{ width: `${D(s.totalValue).gt(0) ? D(a.value).div(s.totalValue).mul(100).toNumber() : 0}%` }} />
+                    <span
+                      style={{
+                        width: `${D(s.totalValue).gt(0) ? D(a.value).div(s.totalValue).mul(100).toNumber() : 0}%`,
+                      }}
+                    />
                   </div>
                   <span className="num">{formatUsd(a.value)}</span>
                 </div>
@@ -167,12 +259,37 @@ export function PortfolioPage() {
           empty="No holdings"
           columns={[
             { key: 'a', header: 'Asset', render: (h) => <AssetLabel asset={h.asset} /> },
-            { key: 'q', header: 'Quantity', align: 'right', render: (h) => <span className="num">{formatNumber(h.quantity, 8, { trim: true })}</span> },
-            { key: 'av', header: 'Available', align: 'right', render: (h) => <span className="num muted">{formatNumber(h.available, 8, { trim: true })}</span> },
-            { key: 'l', header: 'Locked', align: 'right', render: (h) => <span className="num muted">{formatNumber(h.locked, 8, { trim: true })}</span> },
-            { key: 'p', header: 'Price', align: 'right', render: (h) => <span className="num">{fmtPrice(h.price)}</span> },
+            {
+              key: 'q',
+              header: 'Quantity',
+              align: 'right',
+              render: (h) => <span className="num">{formatNumber(h.quantity, 8, { trim: true })}</span>,
+            },
+            {
+              key: 'av',
+              header: 'Available',
+              align: 'right',
+              render: (h) => <span className="num muted">{formatNumber(h.available, 8, { trim: true })}</span>,
+            },
+            {
+              key: 'l',
+              header: 'Locked',
+              align: 'right',
+              render: (h) => <span className="num muted">{formatNumber(h.locked, 8, { trim: true })}</span>,
+            },
+            {
+              key: 'p',
+              header: 'Price',
+              align: 'right',
+              render: (h) => <span className="num">{fmtPrice(h.price)}</span>,
+            },
             { key: 'c', header: '24h', align: 'right', render: (h) => <ChangePct value={h.change24h} /> },
-            { key: 'v', header: 'Value', align: 'right', render: (h) => <strong className="num">{formatUsd(h.usdValue)}</strong> },
+            {
+              key: 'v',
+              header: 'Value',
+              align: 'right',
+              render: (h) => <strong className="num">{formatUsd(h.usdValue)}</strong>,
+            },
           ]}
         />
       </Card>

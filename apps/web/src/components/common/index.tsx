@@ -23,7 +23,11 @@ export function AssetLabel({ asset, sub }: { asset: string; sub?: ReactNode }) {
       <AssetIcon asset={asset} />
       <span className="col" style={{ gap: 0 }}>
         <strong style={{ fontWeight: 600 }}>{asset}</strong>
-        {sub && <span className="faint" style={{ fontSize: 11 }}>{sub}</span>}
+        {sub && (
+          <span className="faint" style={{ fontSize: 11 }}>
+            {sub}
+          </span>
+        )}
       </span>
     </span>
   );
@@ -34,7 +38,15 @@ export function ChangePct({ value, className }: { value: string | null | undefin
   return <span className={`num ${signClass(value)} ${className ?? ''}`}>{formatPercent(value)}</span>;
 }
 
-export function PnL({ value, suffix, className }: { value: string | null | undefined; suffix?: string; className?: string }) {
+export function PnL({
+  value,
+  suffix,
+  className,
+}: {
+  value: string | null | undefined;
+  suffix?: string;
+  className?: string;
+}) {
   if (value === null || value === undefined) return <span className="faint">—</span>;
   const d = D(value);
   const text = `${d.gt(0) ? '+' : ''}${d.toDecimalPlaces(2).toFixed(2)}${suffix ? ` ${suffix}` : ''}`;
@@ -42,7 +54,15 @@ export function PnL({ value, suffix, className }: { value: string | null | undef
 }
 
 /** Price that briefly flashes green/red when it ticks. */
-export function LivePrice({ value, text, className }: { value: string | null | undefined; text: string; className?: string }) {
+export function LivePrice({
+  value,
+  text,
+  className,
+}: {
+  value: string | null | undefined;
+  text: string;
+  className?: string;
+}) {
   const dir = useDirection(value);
   return (
     <span key={value ?? ''} className={`num ${dir ? `flash-${dir}` : ''} ${dir ? dir : ''} ${className ?? ''}`}>

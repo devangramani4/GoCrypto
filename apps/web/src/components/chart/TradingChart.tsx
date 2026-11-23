@@ -1,5 +1,16 @@
 import type { CandleDto, Timeframe } from '@gocrypto/shared-types';
-import { atr, bollingerBands, ema, heikinAshi, macd, type OhlcvBar, rsi, sma, stochastic, vwap } from '@gocrypto/trading-utils';
+import {
+  atr,
+  bollingerBands,
+  ema,
+  heikinAshi,
+  macd,
+  type OhlcvBar,
+  rsi,
+  sma,
+  stochastic,
+  vwap,
+} from '@gocrypto/trading-utils';
 import { Icon, type IconName, Skeleton, cx } from '@gocrypto/ui';
 import {
   AreaSeries,
@@ -84,10 +95,20 @@ export interface TradingChartProps {
 }
 
 /** Professional candlestick chart with indicators, multiple panes and drawing tools. */
-export function TradingChart({ symbol, pricePrecision, tickSize, defaultInterval = '15m', compact }: TradingChartProps) {
+export function TradingChart({
+  symbol,
+  pricePrecision,
+  tickSize,
+  defaultInterval = '15m',
+  compact,
+}: TradingChartProps) {
   const theme = usePrefs((s) => s.theme);
-  const [interval, setInterval_] = useState<Timeframe>(() => (localStorage.getItem('gc.chart.tf') as Timeframe) || defaultInterval);
-  const [chartType, setChartType] = useState<ChartType>(() => (localStorage.getItem('gc.chart.type') as ChartType) || 'candles');
+  const [interval, setInterval_] = useState<Timeframe>(
+    () => (localStorage.getItem('gc.chart.tf') as Timeframe) || defaultInterval,
+  );
+  const [chartType, setChartType] = useState<ChartType>(
+    () => (localStorage.getItem('gc.chart.type') as ChartType) || 'candles',
+  );
   const [indicators, setIndicators] = useState<Indicator[]>(() => {
     try {
       return JSON.parse(localStorage.getItem('gc.chart.ind') ?? '["VOL","EMA"]') as Indicator[];
@@ -121,11 +142,23 @@ export function TradingChart({ symbol, pricePrecision, tickSize, defaultInterval
     if (!container.current) return;
     const chart = createChart(container.current, {
       autoSize: true,
-      layout: { background: { type: ColorType.Solid, color: 'transparent' }, textColor: cssVar('--c-text-muted'), fontFamily: 'Inter, system-ui, sans-serif', fontSize: 11, panes: { separatorColor: cssVar('--c-border'), separatorHoverColor: cssVar('--c-border-strong') } },
+      layout: {
+        background: { type: ColorType.Solid, color: 'transparent' },
+        textColor: cssVar('--c-text-muted'),
+        fontFamily: 'Inter, system-ui, sans-serif',
+        fontSize: 11,
+        panes: { separatorColor: cssVar('--c-border'), separatorHoverColor: cssVar('--c-border-strong') },
+      },
       grid: { vertLines: { color: cssVar('--c-chart-grid') }, horzLines: { color: cssVar('--c-chart-grid') } },
       crosshair: { mode: CrosshairMode.Normal },
       rightPriceScale: { borderColor: cssVar('--c-border') },
-      timeScale: { borderColor: cssVar('--c-border'), timeVisible: true, secondsVisible: false, rightOffset: 6, barSpacing: 7 },
+      timeScale: {
+        borderColor: cssVar('--c-border'),
+        timeVisible: true,
+        secondsVisible: false,
+        rightOffset: 6,
+        barSpacing: 7,
+      },
       localization: { priceFormatter: (p: number) => p.toFixed(pricePrecision) },
     });
     chartRef.current = chart;
@@ -166,7 +199,13 @@ export function TradingChart({ symbol, pricePrecision, tickSize, defaultInterval
     let main: ISeriesApi<SeriesType>;
     if (chartType === 'line') main = chart.addSeries(LineSeries, { color: brand, lineWidth: 2, priceFormat });
     else if (chartType === 'area') {
-      main = chart.addSeries(AreaSeries, { lineColor: brand, topColor: `${brand}55`, bottomColor: `${brand}05`, lineWidth: 2, priceFormat });
+      main = chart.addSeries(AreaSeries, {
+        lineColor: brand,
+        topColor: `${brand}55`,
+        bottomColor: `${brand}05`,
+        lineWidth: 2,
+        priceFormat,
+      });
     } else {
       main = chart.addSeries(CandlestickSeries, {
         upColor: up,
@@ -180,12 +219,34 @@ export function TradingChart({ symbol, pricePrecision, tickSize, defaultInterval
     }
     const next: SeriesSet = { main, volume: null, lines: [] };
     if (indicators.includes('VOL')) {
-      const vol = chart.addSeries(HistogramSeries, { priceScaleId: 'vol', priceFormat: { type: 'volume' }, lastValueVisible: false, priceLineVisible: false });
+      const vol = chart.addSeries(HistogramSeries, {
+        priceScaleId: 'vol',
+        priceFormat: { type: 'volume' },
+        lastValueVisible: false,
+        priceLineVisible: false,
+      });
       chart.priceScale('vol').applyOptions({ scaleMargins: { top: 0.82, bottom: 0 } });
       next.volume = vol;
     }
-    const overlay = (color: string, compute: (b: OhlcvBar[]) => unknown[], pane = 0, width: 1 | 2 = 1, style?: LineStyle) => {
-      const s = chart.addSeries(LineSeries, { color, lineWidth: width, lineStyle: style, priceLineVisible: false, lastValueVisible: false, crosshairMarkerVisible: false }, pane);
+    const overlay = (
+      color: string,
+      compute: (b: OhlcvBar[]) => unknown[],
+      pane = 0,
+      width: 1 | 2 = 1,
+      style?: LineStyle,
+    ) => {
+      const s = chart.addSeries(
+        LineSeries,
+        {
+          color,
+          lineWidth: width,
+          lineStyle: style,
+          priceLineVisible: false,
+          lastValueVisible: false,
+          crosshairMarkerVisible: false,
+        },
+        pane,
+      );
       next.lines.push({ series: s, compute });
       return s;
     };
@@ -201,8 +262,22 @@ export function TradingChart({ symbol, pricePrecision, tickSize, defaultInterval
     let pane = 1;
     if (indicators.includes('RSI')) {
       const s = overlay('#a78bfa', (b) => lineData(b, rsi(closes(b), 14)), pane, 2);
-      s.createPriceLine({ price: 70, color: down, lineStyle: LineStyle.Dotted, lineWidth: 1, axisLabelVisible: false, title: '' });
-      s.createPriceLine({ price: 30, color: up, lineStyle: LineStyle.Dotted, lineWidth: 1, axisLabelVisible: false, title: '' });
+      s.createPriceLine({
+        price: 70,
+        color: down,
+        lineStyle: LineStyle.Dotted,
+        lineWidth: 1,
+        axisLabelVisible: false,
+        title: '',
+      });
+      s.createPriceLine({
+        price: 30,
+        color: up,
+        lineStyle: LineStyle.Dotted,
+        lineWidth: 1,
+        axisLabelVisible: false,
+        title: '',
+      });
       pane += 1;
     }
     if (indicators.includes('MACD')) {
@@ -240,12 +315,16 @@ export function TradingChart({ symbol, pricePrecision, tickSize, defaultInterval
     if (chartType === 'line' || chartType === 'area') {
       set.main.setData(source.map((x) => ({ time: x.time as UTCTimestamp, value: x.close })));
     } else {
-      set.main.setData(source.map((x) => ({ time: x.time as UTCTimestamp, open: x.open, high: x.high, low: x.low, close: x.close })));
+      set.main.setData(
+        source.map((x) => ({ time: x.time as UTCTimestamp, open: x.open, high: x.high, low: x.low, close: x.close })),
+      );
     }
     if (set.volume) {
       const up = cssVar('--c-up-soft');
       const down = cssVar('--c-down-soft');
-      set.volume.setData(b.map((x) => ({ time: x.time as UTCTimestamp, value: x.volume, color: x.close >= x.open ? up : down })));
+      set.volume.setData(
+        b.map((x) => ({ time: x.time as UTCTimestamp, value: x.volume, color: x.close >= x.open ? up : down })),
+      );
     }
     for (const l of set.lines) l.series.setData(l.compute(b) as never);
     if (fit && b.length) chartRef.current?.timeScale().fitContent();
@@ -284,7 +363,14 @@ export function TradingChart({ symbol, pricePrecision, tickSize, defaultInterval
         primitives.current.trend.push(prim);
       } else if (d.kind === 'hline' && d.points[0]) {
         primitives.current.lines.push(
-          main.createPriceLine({ price: d.points[0].price, color, lineWidth: 1, lineStyle: LineStyle.Dashed, axisLabelVisible: true, title: 'S/R' }),
+          main.createPriceLine({
+            price: d.points[0].price,
+            color,
+            lineWidth: 1,
+            lineStyle: LineStyle.Dashed,
+            axisLabelVisible: true,
+            title: 'S/R',
+          }),
         );
       }
     }
@@ -338,7 +424,12 @@ export function TradingChart({ symbol, pricePrecision, tickSize, defaultInterval
       <div className="chart__toolbar">
         <div className="chart__tfs" role="group" aria-label="Timeframe">
           {TIMEFRAMES.map((t) => (
-            <button key={t.value} type="button" aria-pressed={interval === t.value} onClick={() => setInterval_(t.value)}>
+            <button
+              key={t.value}
+              type="button"
+              aria-pressed={interval === t.value}
+              onClick={() => setInterval_(t.value)}
+            >
               {t.label}
             </button>
           ))}
@@ -377,29 +468,56 @@ export function TradingChart({ symbol, pricePrecision, tickSize, defaultInterval
         </div>
         <span className="spacer" />
         {tools.map((t) => (
-          <button key={t.id} type="button" className={cx('chart__icon', tool === t.id && 'active')} onClick={() => setTool(t.id)} data-tip={t.label} aria-label={t.label}>
+          <button
+            key={t.id}
+            type="button"
+            className={cx('chart__icon', tool === t.id && 'active')}
+            onClick={() => setTool(t.id)}
+            data-tip={t.label}
+            aria-label={t.label}
+          >
             <Icon name={t.icon} size={15} />
           </button>
         ))}
-        <button type="button" className="chart__icon" onClick={() => setDrawings([])} data-tip="Remove drawings" aria-label="Remove drawings" disabled={!drawings.length}>
+        <button
+          type="button"
+          className="chart__icon"
+          onClick={() => setDrawings([])}
+          data-tip="Remove drawings"
+          aria-label="Remove drawings"
+          disabled={!drawings.length}
+        >
           <Icon name="trash" size={15} />
         </button>
-        <button type="button" className="chart__icon" onClick={() => chartRef.current?.timeScale().fitContent()} data-tip="Fit" aria-label="Fit chart">
+        <button
+          type="button"
+          className="chart__icon"
+          onClick={() => chartRef.current?.timeScale().fitContent()}
+          data-tip="Fit"
+          aria-label="Fit chart"
+        >
           <Icon name="maximize" size={15} />
         </button>
       </div>
       <div className="chart__body">
         {last && (
           <div className="chart__legend num">
-            <span className="muted">O</span> <span className={change >= 0 ? 'up' : 'down'}>{last.open.toFixed(pricePrecision)}</span>{' '}
-            <span className="muted">H</span> <span className={change >= 0 ? 'up' : 'down'}>{last.high.toFixed(pricePrecision)}</span>{' '}
-            <span className="muted">L</span> <span className={change >= 0 ? 'up' : 'down'}>{last.low.toFixed(pricePrecision)}</span>{' '}
-            <span className="muted">C</span> <span className={change >= 0 ? 'up' : 'down'}>{last.close.toFixed(pricePrecision)}</span>{' '}
-            <span className="muted">V</span> <span>{last.volume.toLocaleString(undefined, { maximumFractionDigits: 2 })}</span>
+            <span className="muted">O</span>{' '}
+            <span className={change >= 0 ? 'up' : 'down'}>{last.open.toFixed(pricePrecision)}</span>{' '}
+            <span className="muted">H</span>{' '}
+            <span className={change >= 0 ? 'up' : 'down'}>{last.high.toFixed(pricePrecision)}</span>{' '}
+            <span className="muted">L</span>{' '}
+            <span className={change >= 0 ? 'up' : 'down'}>{last.low.toFixed(pricePrecision)}</span>{' '}
+            <span className="muted">C</span>{' '}
+            <span className={change >= 0 ? 'up' : 'down'}>{last.close.toFixed(pricePrecision)}</span>{' '}
+            <span className="muted">V</span>{' '}
+            <span>{last.volume.toLocaleString(undefined, { maximumFractionDigits: 2 })}</span>
           </div>
         )}
         {pendingHint && <div className="chart__hint">Click the second point of the trend line</div>}
-        {tool !== 'cursor' && !pendingHint && <div className="chart__hint">Click on the chart to place the {tool === 'trend' ? 'first point' : 'line'}</div>}
+        {tool !== 'cursor' && !pendingHint && (
+          <div className="chart__hint">Click on the chart to place the {tool === 'trend' ? 'first point' : 'line'}</div>
+        )}
         {loading && (
           <div className="chart__overlay">
             <Skeleton width="100%" height="100%" />

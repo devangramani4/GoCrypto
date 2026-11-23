@@ -20,14 +20,18 @@ function useDocumentTitle(market: MarketDto | undefined) {
   const { data: t } = useTicker(market?.symbol ?? '');
   useEffect(() => {
     if (!market) return;
-    document.title = t ? `${fmtPrice(t.lastPrice, market)} | ${market.symbol} | GoCrypto` : `${market.symbol} | GoCrypto`;
+    document.title = t
+      ? `${fmtPrice(t.lastPrice, market)} | ${market.symbol} | GoCrypto`
+      : `${market.symbol} | GoCrypto`;
   }, [market, t]);
   useEffect(() => () => void (document.title = 'GoCrypto'), []);
 }
 
 function useIsWide(min = 1100): boolean {
   const q = `(min-width: ${min}px)`;
-  const [wide, setWide] = useState(() => (typeof window !== 'undefined' && window.matchMedia ? window.matchMedia(q).matches : true));
+  const [wide, setWide] = useState(() =>
+    typeof window !== 'undefined' && window.matchMedia ? window.matchMedia(q).matches : true,
+  );
   useEffect(() => {
     if (!window.matchMedia) return;
     const mq = window.matchMedia(q);
@@ -51,13 +55,23 @@ function BookPanel({ market }: { market: MarketDto }) {
           { value: 'trades', label: 'Trades' },
         ]}
       />
-      <div className="panel__body">{tab === 'book' ? <OrderBook market={market} onPriceClick={(p) => pick(p)} /> : <RecentTrades market={market} />}</div>
+      <div className="panel__body">
+        {tab === 'book' ? (
+          <OrderBook market={market} onPriceClick={(p) => pick(p)} />
+        ) : (
+          <RecentTrades market={market} />
+        )}
+      </div>
     </div>
   );
 }
 
 function Ticket({ market, kind }: { market: MarketDto; kind: Kind }) {
-  return <div className="panel panel--ticket">{kind === 'futures' ? <FuturesOrderForm market={market} /> : <SpotOrderForm market={market} />}</div>;
+  return (
+    <div className="panel panel--ticket">
+      {kind === 'futures' ? <FuturesOrderForm market={market} /> : <SpotOrderForm market={market} />}
+    </div>
+  );
 }
 
 export function TradePage({ kind }: { kind: Kind }) {
@@ -82,15 +96,24 @@ export function TradePage({ kind }: { kind: Kind }) {
       </div>
     );
   }
-  if (error) return <EmptyState icon="alert" title="Markets are unavailable" description="Check your connection and try again." />;
+  if (error)
+    return (
+      <EmptyState icon="alert" title="Markets are unavailable" description="Check your connection and try again." />
+    );
   if (!market) {
     const fallback = markets?.[0]?.symbol;
-    if (fallback && symbol.toUpperCase() !== fallback) return <Navigate to={`/${kind === 'futures' ? 'futures' : 'trade'}/${fallback}`} replace />;
+    if (fallback && symbol.toUpperCase() !== fallback)
+      return <Navigate to={`/${kind === 'futures' ? 'futures' : 'trade'}/${fallback}`} replace />;
     return <EmptyState title="Market not found" description={<Link to="/markets">Browse all markets</Link>} />;
   }
 
   const layoutToggle = wide && (
-    <button type="button" className="layout-toggle" onClick={() => setPro(!pro)} title={pro ? 'Classic layout' : 'Pro layout (resizable panels)'}>
+    <button
+      type="button"
+      className="layout-toggle"
+      onClick={() => setPro(!pro)}
+      title={pro ? 'Classic layout' : 'Pro layout (resizable panels)'}
+    >
       <Icon name={pro ? 'grid' : 'layers'} size={14} /> {pro ? 'Classic' : 'Pro'}
     </button>
   );
@@ -131,7 +154,12 @@ function ProLayout({ market, kind, toggle }: { market: MarketDto; kind: Kind; to
         <MarketHeader market={market} kind={kind} />
         {toggle}
       </div>
-      <Group orientation="horizontal" className="pro__group" defaultLayout={outer.defaultLayout} onLayoutChanged={outer.onLayoutChanged}>
+      <Group
+        orientation="horizontal"
+        className="pro__group"
+        defaultLayout={outer.defaultLayout}
+        onLayoutChanged={outer.onLayoutChanged}
+      >
         <Panel id="markets" defaultSize="16%" minSize="10%" collapsible className="pro__panel">
           <div className="panel">
             <div className="panel__title">Markets</div>
@@ -145,7 +173,11 @@ function ProLayout({ market, kind, toggle }: { market: MarketDto; kind: Kind; to
           <Group orientation="vertical" defaultLayout={center.defaultLayout} onLayoutChanged={center.onLayoutChanged}>
             <Panel id="chart" defaultSize="64%" minSize="25%" className="pro__panel">
               <div className="panel">
-                <TradingChart symbol={market.symbol} pricePrecision={market.pricePrecision} tickSize={market.tickSize} />
+                <TradingChart
+                  symbol={market.symbol}
+                  pricePrecision={market.pricePrecision}
+                  tickSize={market.tickSize}
+                />
               </div>
             </Panel>
             <Separator className="pro__sep pro__sep--h" />

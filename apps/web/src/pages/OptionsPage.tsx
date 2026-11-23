@@ -1,6 +1,28 @@
 import type { OptionQuoteDto, OptionsChainRowDto, OrderSide } from '@gocrypto/shared-types';
-import { D, FILTER_MESSAGES, checkPrice, checkQuantity, dmin, formatNumber, shortOptionInitialMargin } from '@gocrypto/trading-utils';
-import { Alert, Badge, Button, Card, Checkbox, EmptyState, KeyValue, Segmented, Skeleton, Switch, Tabs, cx, useToast } from '@gocrypto/ui';
+import {
+  D,
+  FILTER_MESSAGES,
+  checkPrice,
+  checkQuantity,
+  dmin,
+  formatNumber,
+  shortOptionInitialMargin,
+} from '@gocrypto/trading-utils';
+import {
+  Alert,
+  Badge,
+  Button,
+  Card,
+  Checkbox,
+  EmptyState,
+  KeyValue,
+  Segmented,
+  Skeleton,
+  Switch,
+  Tabs,
+  cx,
+  useToast,
+} from '@gocrypto/ui';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { AuthCta, DecimalInput, InfoRow } from '../components/trading/controls';
@@ -31,13 +53,27 @@ function pct(iv: number | null | undefined): string {
 
 export function OptionsPage() {
   const authed = useAuthed();
-  const underlyings = useQuery({ queryKey: ['options', 'underlyings'], queryFn: () => api.options.underlyings(), staleTime: 300_000 });
+  const underlyings = useQuery({
+    queryKey: ['options', 'underlyings'],
+    queryFn: () => api.options.underlyings(),
+    staleTime: 300_000,
+  });
   const [underlying, setUnderlying] = useState<string | null>(null);
   const u = underlying ?? underlyings.data?.[0] ?? null;
-  const expiries = useQuery({ queryKey: ['options', 'expiries', u], queryFn: () => api.options.expiries(u!), enabled: Boolean(u), staleTime: 60_000 });
+  const expiries = useQuery({
+    queryKey: ['options', 'expiries', u],
+    queryFn: () => api.options.expiries(u!),
+    enabled: Boolean(u),
+    staleTime: 60_000,
+  });
   const [expiry, setExpiry] = useState<number | null>(null);
   const exp = expiry && expiries.data?.some((e) => e.expiry === expiry) ? expiry : (expiries.data?.[0]?.expiry ?? null);
-  const chain = useQuery({ queryKey: ['options', 'chain', u, exp], queryFn: () => api.options.chain(u!, exp!), enabled: Boolean(u && exp), refetchInterval: 4000 });
+  const chain = useQuery({
+    queryKey: ['options', 'chain', u, exp],
+    queryFn: () => api.options.chain(u!, exp!),
+    enabled: Boolean(u && exp),
+    refetchInterval: 4000,
+  });
   const [greeks, setGreeks] = useState(false);
   const [sel, setSel] = useState<Selection | null>(null);
   const [bottom, setBottom] = useState<'positions' | 'orders'>('positions');
@@ -52,7 +88,13 @@ export function OptionsPage() {
   }, [sel, chain.data]);
 
   const index = chain.data ? D(chain.data.indexPrice) : null;
-  const pick = (q: OptionQuoteDto | null, type: 'CALL' | 'PUT', strike: string, side: OrderSide, price: string | null) => {
+  const pick = (
+    q: OptionQuoteDto | null,
+    type: 'CALL' | 'PUT',
+    strike: string,
+    side: OrderSide,
+    price: string | null,
+  ) => {
     if (q) setSel({ quote: q, type, strike, side, price });
   };
 
@@ -62,22 +104,54 @@ export function OptionsPage() {
     const selected = Boolean(live && q && q.symbol === live.quote.symbol);
     const cls = (c: string) => cx(c, itm && 'itm', selected && 'sel');
     const cells = [
-      greeks && <td key="g" className={cls('num faint')}>{q ? q.greeks.gamma.toFixed(5) : '—'}</td>,
-      greeks && <td key="t" className={cls('num faint')}>{q ? q.greeks.theta.toFixed(2) : '—'}</td>,
-      greeks && <td key="v" className={cls('num faint')}>{q ? q.greeks.vega.toFixed(2) : '—'}</td>,
-      <td key="oi" className={cls('num muted')}>{q ? formatNumber(q.openInterest, 2, { trim: true }) : '—'}</td>,
-      <td key="vol" className={cls('num muted')}>{q ? formatNumber(q.volume24h, 2, { trim: true }) : '—'}</td>,
-      <td key="d" className={cls('num')}>{q ? q.greeks.delta.toFixed(3) : '—'}</td>,
-      <td key="iv" className={cls('num muted')}>{q ? pct(q.markIv) : '—'}</td>,
-      <td key="last" className={cls('num')}>{q?.last ? usdt(q.last) : '—'}</td>,
+      greeks && (
+        <td key="g" className={cls('num faint')}>
+          {q ? q.greeks.gamma.toFixed(5) : '—'}
+        </td>
+      ),
+      greeks && (
+        <td key="t" className={cls('num faint')}>
+          {q ? q.greeks.theta.toFixed(2) : '—'}
+        </td>
+      ),
+      greeks && (
+        <td key="v" className={cls('num faint')}>
+          {q ? q.greeks.vega.toFixed(2) : '—'}
+        </td>
+      ),
+      <td key="oi" className={cls('num muted')}>
+        {q ? formatNumber(q.openInterest, 2, { trim: true }) : '—'}
+      </td>,
+      <td key="vol" className={cls('num muted')}>
+        {q ? formatNumber(q.volume24h, 2, { trim: true }) : '—'}
+      </td>,
+      <td key="d" className={cls('num')}>
+        {q ? q.greeks.delta.toFixed(3) : '—'}
+      </td>,
+      <td key="iv" className={cls('num muted')}>
+        {q ? pct(q.markIv) : '—'}
+      </td>,
+      <td key="last" className={cls('num')}>
+        {q?.last ? usdt(q.last) : '—'}
+      </td>,
       <td key="bid" className={cls('num chain__bid')}>
-        <button type="button" disabled={!q?.bid} onClick={() => pick(q, type, row.strike, 'SELL', q?.bid ?? null)} title="Sell at bid">
+        <button
+          type="button"
+          disabled={!q?.bid}
+          onClick={() => pick(q, type, row.strike, 'SELL', q?.bid ?? null)}
+          title="Sell at bid"
+        >
           {q?.bid ? usdt(q.bid) : '—'}
           {q?.bidIv != null && <small>{pct(q.bidIv)}</small>}
         </button>
       </td>,
       <td key="ask" className={cls('num chain__ask')}>
-        <button type="button" disabled={!q?.ask} onClick={() => pick(q, type, row.strike, 'BUY', q?.ask ?? null)} title="Buy at ask">
+        <button
+          type="button"
+          disabled={!q?.ask}
+          onClick={() => pick(q, type, row.strike, 'BUY', q?.ask ?? null)}
+          title="Buy at ask"
+        >
           {q?.ask ? usdt(q.ask) : '—'}
           {q?.askIv != null && <small>{pct(q.askIv)}</small>}
         </button>
@@ -86,23 +160,33 @@ export function OptionsPage() {
     return type === 'CALL' ? cells : [...cells].reverse();
   };
 
-  const heads = ['Gamma', 'Theta', 'Vega'].filter(() => greeks).concat(['OI', 'Volume', 'Delta', 'IV', 'Last', 'Bid', 'Ask']);
+  const heads = ['Gamma', 'Theta', 'Vega']
+    .filter(() => greeks)
+    .concat(['OI', 'Volume', 'Delta', 'IV', 'Last', 'Bid', 'Ask']);
 
   return (
     <div className="page page--wide options">
       <div className="page__head">
         <div>
           <h1>Options</h1>
-          <p className="muted">European-style, cash-settled in USDT at expiry (08:00 UTC). Premiums and Greeks are indicative; orders execute on the central order book.</p>
+          <p className="muted">
+            European-style, cash-settled in USDT at expiry (08:00 UTC). Premiums and Greeks are indicative; orders
+            execute on the central order book.
+          </p>
         </div>
       </div>
       <Card noPadding>
         <div className="options__bar">
-          <Tabs value={u ?? ''} onChange={(v) => setUnderlying(v)} tabs={(underlyings.data ?? []).map((x) => ({ value: x, label: x }))} />
+          <Tabs
+            value={u ?? ''}
+            onChange={(v) => setUnderlying(v)}
+            tabs={(underlyings.data ?? []).map((x) => ({ value: x, label: x }))}
+          />
           <span className="spacer" />
           {chain.data && (
             <span className="options__index">
-              <span className="faint">{u} index</span> <strong className="num">{fmtPrice(chain.data.indexPrice)}</strong>
+              <span className="faint">{u} index</span>{' '}
+              <strong className="num">{fmtPrice(chain.data.indexPrice)}</strong>
             </span>
           )}
           <span className="row" style={{ gap: 8 }}>
@@ -115,7 +199,12 @@ export function OptionsPage() {
         <div className="options__expiries">
           {expiries.isLoading && <Skeleton width={300} height={26} />}
           {(expiries.data ?? []).map((e) => (
-            <button key={e.expiry} type="button" className={cx('expiry-pill', e.expiry === exp && 'on')} onClick={() => setExpiry(e.expiry)}>
+            <button
+              key={e.expiry}
+              type="button"
+              className={cx('expiry-pill', e.expiry === exp && 'on')}
+              onClick={() => setExpiry(e.expiry)}
+            >
               {expiryLabel(e.expiry)} <span className="faint">{e.daysToExpiry}d</span>
             </button>
           ))}
@@ -132,7 +221,11 @@ export function OptionsPage() {
               ))}
             </div>
           ) : !chain.data || chain.data.rows.length === 0 ? (
-            <EmptyState icon="layers" title="No contracts listed" description="Option series are listed automatically by the options lifecycle worker." />
+            <EmptyState
+              icon="layers"
+              title="No contracts listed"
+              description="Option series are listed automatically by the options lifecycle worker."
+            />
           ) : (
             <div className="chain-wrap">
               <table className="chain">
@@ -176,7 +269,11 @@ export function OptionsPage() {
           )}
         </Card>
         <Card className="options__ticket" title={live ? live.quote.symbol : 'Order ticket'}>
-          {live ? <OptionTicket sel={live} indexPrice={chain.data?.indexPrice ?? '0'} onClose={() => setSel(null)} /> : <p className="muted">Select a bid to sell or an ask to buy a contract from the chain.</p>}
+          {live ? (
+            <OptionTicket sel={live} indexPrice={chain.data?.indexPrice ?? '0'} onClose={() => setSel(null)} />
+          ) : (
+            <p className="muted">Select a bid to sell or an ask to buy a contract from the chain.</p>
+          )}
         </Card>
       </div>
 
@@ -193,7 +290,13 @@ export function OptionsPage() {
           />
         }
       >
-        {!authed ? <div className="gc-state">Log in to view your option positions.</div> : bottom === 'positions' ? <OptionPositionsTable /> : <OpenOrdersTable marketType="OPTIONS" />}
+        {!authed ? (
+          <div className="gc-state">Log in to view your option positions.</div>
+        ) : bottom === 'positions' ? (
+          <OptionPositionsTable />
+        ) : (
+          <OpenOrdersTable marketType="OPTIONS" />
+        )}
       </Card>
     </div>
   );
@@ -203,7 +306,11 @@ function OptionTicket({ sel, indexPrice, onClose }: { sel: Selection; indexPrice
   const authed = useAuthed();
   const toast = useToast();
   const qc = useQueryClient();
-  const market = useQuery({ queryKey: ['market', sel.quote.symbol], queryFn: () => api.markets.get(sel.quote.symbol), staleTime: 60_000 });
+  const market = useQuery({
+    queryKey: ['market', sel.quote.symbol],
+    queryFn: () => api.markets.get(sel.quote.symbol),
+    staleTime: 60_000,
+  });
   const account = useQuery({ queryKey: ['options-account'], queryFn: () => api.options.account(), enabled: authed });
   const [side, setSide] = useState<OrderSide>(sel.side);
   const [type, setType] = useState<'LIMIT' | 'MARKET'>('LIMIT');
@@ -219,13 +326,26 @@ function OptionTicket({ sel, indexPrice, onClose }: { sel: Selection; indexPrice
   }, [sel.quote.symbol, sel.side, sel.price]);
 
   const m = market.data;
-  const refPrice = type === 'LIMIT' ? price : (side === 'BUY' ? sel.quote.ask : sel.quote.bid) ?? sel.quote.markPrice;
+  const refPrice = type === 'LIMIT' ? price : ((side === 'BUY' ? sel.quote.ask : sel.quote.bid) ?? sel.quote.markPrice);
   const premium = isPositive(qty) && isPositive(refPrice) ? D(qty).mul(refPrice) : D(0);
   // Options fee (as charged by the engine): rate × index × qty, capped at 12.5% of the premium.
-  const fee = premium.gt(0) ? dmin(D(m?.takerFeeRate ?? '0.0003').mul(indexPrice).mul(qty), premium.mul('0.125')) : D(0);
+  const fee = premium.gt(0)
+    ? dmin(
+        D(m?.takerFeeRate ?? '0.0003')
+          .mul(indexPrice)
+          .mul(qty),
+        premium.mul('0.125'),
+      )
+    : D(0);
   const shortMargin =
     side === 'SELL' && isPositive(qty)
-      ? shortOptionInitialMargin({ type: sel.type, indexPrice, strike: sel.strike, markPrice: sel.quote.markPrice, qty })
+      ? shortOptionInitialMargin({
+          type: sel.type,
+          indexPrice,
+          strike: sel.strike,
+          markPrice: sel.quote.markPrice,
+          qty,
+        })
       : D(0);
   const available = account.data?.availableBalance ?? '0';
 
@@ -244,10 +364,13 @@ function OptionTicket({ sel, indexPrice, onClose }: { sel: Selection; indexPrice
         ...(reduceOnly ? { reduceOnly: true } : {}),
       }),
     onSuccess: ({ order: o }) => {
-      if (o.status === 'REJECTED' || (o.status === 'EXPIRED' && !D(o.filledQuantity).gt(0))) toast.error(`Order ${o.status.toLowerCase()}`, o.rejectReason ? humanize(o.rejectReason) : undefined);
-      else toast.success(o.status === 'FILLED' ? 'Order filled' : 'Order placed', `${o.side} ${o.quantity} ${o.symbol}`);
+      if (o.status === 'REJECTED' || (o.status === 'EXPIRED' && !D(o.filledQuantity).gt(0)))
+        toast.error(`Order ${o.status.toLowerCase()}`, o.rejectReason ? humanize(o.rejectReason) : undefined);
+      else
+        toast.success(o.status === 'FILLED' ? 'Order filled' : 'Order placed', `${o.side} ${o.quantity} ${o.symbol}`);
       setQty('');
-      for (const k of ['orders', 'positions', 'options-account', 'balances', 'fills']) void qc.invalidateQueries({ queryKey: [k] });
+      for (const k of ['orders', 'positions', 'options-account', 'balances', 'fills'])
+        void qc.invalidateQueries({ queryKey: [k] });
     },
     onError: (e) => toast.error('Order not placed', errorMessage(e)),
   });
@@ -264,7 +387,8 @@ function OptionTicket({ sel, indexPrice, onClose }: { sel: Selection; indexPrice
     const qv = checkQuantity(qty, m, type === 'MARKET');
     if (qv) return setError(FILTER_MESSAGES[qv]);
     const need = side === 'BUY' ? premium.plus(fee) : shortMargin.minus(premium).plus(fee);
-    if (!reduceOnly && need.gt(available)) return setError('Insufficient balance in your options account — transfer USDT from spot first');
+    if (!reduceOnly && need.gt(available))
+      return setError('Insufficient balance in your options account — transfer USDT from spot first');
     if (inFlight.current) return;
     inFlight.current = true;
     place.mutate();
@@ -308,22 +432,55 @@ function OptionTicket({ sel, indexPrice, onClose }: { sel: Selection; indexPrice
           { value: 'MARKET', label: 'Market' },
         ]}
       />
-      {type === 'LIMIT' && <DecimalInput label="Price" unit="USDT" value={price} onChange={setPrice} decimals={m?.pricePrecision ?? 2} />}
-      <DecimalInput label="Quantity" unit={m?.base ?? ''} value={qty} onChange={setQty} decimals={m?.qtyPrecision ?? 2} />
+      {type === 'LIMIT' && (
+        <DecimalInput label="Price" unit="USDT" value={price} onChange={setPrice} decimals={m?.pricePrecision ?? 2} />
+      )}
+      <DecimalInput
+        label="Quantity"
+        unit={m?.base ?? ''}
+        value={qty}
+        onChange={setQty}
+        decimals={m?.qtyPrecision ?? 2}
+      />
       <Checkbox checked={reduceOnly} onChange={setReduceOnly}>
         Reduce-only
       </Checkbox>
       <div className="ticket__info">
         <InfoRow label="Available">{authed ? `${formatNumber(available, 2)} USDT` : '—'}</InfoRow>
-        <InfoRow label={side === 'BUY' ? 'Premium (cost)' : 'Premium (received)'}>{premium.gt(0) ? `${formatNumber(premium, 2)} USDT` : '—'}</InfoRow>
-        {side === 'SELL' && <InfoRow label="Initial margin (est.)" tip="Short options are margined: max(15% S − OTM, 10% S|K) + mark">{shortMargin.gt(0) ? `${formatNumber(shortMargin, 2)} USDT` : '—'}</InfoRow>}
+        <InfoRow label={side === 'BUY' ? 'Premium (cost)' : 'Premium (received)'}>
+          {premium.gt(0) ? `${formatNumber(premium, 2)} USDT` : '—'}
+        </InfoRow>
+        {side === 'SELL' && (
+          <InfoRow label="Initial margin (est.)" tip="Short options are margined: max(15% S − OTM, 10% S|K) + mark">
+            {shortMargin.gt(0) ? `${formatNumber(shortMargin, 2)} USDT` : '—'}
+          </InfoRow>
+        )}
         <InfoRow label="Est. fee">{fee.gt(0) ? `${formatNumber(fee, 4)} USDT` : '—'}</InfoRow>
-        <InfoRow label="Max loss">{side === 'BUY' ? (premium.gt(0) ? `${formatNumber(premium.plus(fee), 2)} USDT` : '—') : <span className="down">Unlimited{sel.type === 'PUT' ? ' (to strike)' : ''}</span>}</InfoRow>
+        <InfoRow label="Max loss">
+          {side === 'BUY' ? (
+            premium.gt(0) ? (
+              `${formatNumber(premium.plus(fee), 2)} USDT`
+            ) : (
+              '—'
+            )
+          ) : (
+            <span className="down">Unlimited{sel.type === 'PUT' ? ' (to strike)' : ''}</span>
+          )}
+        </InfoRow>
       </div>
-      {side === 'SELL' && !reduceOnly && <Alert tone="warn">Selling options carries substantial risk; losses can exceed the premium received.</Alert>}
+      {side === 'SELL' && !reduceOnly && (
+        <Alert tone="warn">Selling options carries substantial risk; losses can exceed the premium received.</Alert>
+      )}
       {error && <Alert tone="error">{error}</Alert>}
       {authed ? (
-        <Button variant={side === 'BUY' ? 'buy' : 'sell'} size="lg" block loading={place.isPending} onClick={submit} disabled={!m}>
+        <Button
+          variant={side === 'BUY' ? 'buy' : 'sell'}
+          size="lg"
+          block
+          loading={place.isPending}
+          onClick={submit}
+          disabled={!m}
+        >
           {side === 'BUY' ? 'Buy' : 'Sell'} {sel.type === 'CALL' ? 'call' : 'put'}
         </Button>
       ) : (

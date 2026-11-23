@@ -84,7 +84,14 @@ export const BTC_TICKER: TickerDto = {
 /** Fresh mock of every API namespace the web app touches; list endpoints resolve to empty data. */
 export function createMockApi() {
   return {
-    system: { status: fn(async () => ({ mode: 'SANDBOX' as const, serverTime: Date.now(), version: 'test', simulatedDeposits: true })) },
+    system: {
+      status: fn(async () => ({
+        mode: 'SANDBOX' as const,
+        serverTime: Date.now(),
+        version: 'test',
+        simulatedDeposits: true,
+      })),
+    },
     auth: {
       login: fn(),
       loginMfa: fn(),
@@ -126,7 +133,12 @@ export function createMockApi() {
       setTpSl: fn(),
       adjustMargin: fn(),
     },
-    options: { positions: fn(async () => []), open: fn(async () => []), account: fn(), settlements: fn(async () => []) },
+    options: {
+      positions: fn(async () => []),
+      open: fn(async () => []),
+      account: fn(),
+      settlements: fn(async () => []),
+    },
     wallet: {
       overview: fn(),
       balances: fn(async () => []),
@@ -145,8 +157,19 @@ export function createMockApi() {
       internalTransfer: fn(),
       cancelWithdrawal: fn(),
     },
-    portfolio: { summary: fn(), allocation: fn(async () => []), holdings: fn(async () => []), performance: fn(async () => []), positions: fn() },
-    notifications: { list: fn(async () => page()), unreadCount: fn(async () => ({ count: 0 })), markRead: fn(), markAllRead: fn() },
+    portfolio: {
+      summary: fn(),
+      allocation: fn(async () => []),
+      holdings: fn(async () => []),
+      performance: fn(async () => []),
+      positions: fn(),
+    },
+    notifications: {
+      list: fn(async () => page()),
+      unreadCount: fn(async () => ({ count: 0 })),
+      markRead: fn(),
+      markAllRead: fn(),
+    },
   };
 }
 

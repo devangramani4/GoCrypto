@@ -20,7 +20,8 @@ export default defineConfig(({ mode }) => ({
     rollupOptions: {
       output: {
         manualChunks(id: string) {
-          if (id.includes('node_modules/lightweight-charts') || id.includes('node_modules/fancy-canvas')) return 'charts';
+          if (id.includes('node_modules/lightweight-charts') || id.includes('node_modules/fancy-canvas'))
+            return 'charts';
           if (/node_modules\/(react|react-dom|react-router|scheduler|@tanstack|zustand)\//.test(id)) return 'vendor';
           return undefined;
         },

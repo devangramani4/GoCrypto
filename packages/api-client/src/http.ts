@@ -168,7 +168,10 @@ export class HttpClient {
       throw new ApiError(0, null, 'Network error — check your connection');
     }
     if (res.status === 401 && auth) {
-      const body = (await res.clone().json().catch(() => null)) as ApiErrorBody | null;
+      const body = (await res
+        .clone()
+        .json()
+        .catch(() => null)) as ApiErrorBody | null;
       if (body && AUTH_RETRY_CODES.has(body.error.code)) {
         const fresh = await this.refresh();
         if (fresh) res = await send(fresh.accessToken);
@@ -191,7 +194,9 @@ export function randomId(prefix = ''): string {
   const c = globalThis.crypto as Crypto | undefined;
   let raw: string;
   if (c?.randomUUID) raw = c.randomUUID().replace(/-/g, '');
-  else if (c?.getRandomValues) raw = Array.from(c.getRandomValues(new Uint8Array(16)), (b) => b.toString(16).padStart(2, '0')).join('');
-  else raw = `${Date.now().toString(16)}${Array.from({ length: 20 }, () => Math.floor(Math.random() * 16).toString(16)).join('')}`;
+  else if (c?.getRandomValues)
+    raw = Array.from(c.getRandomValues(new Uint8Array(16)), (b) => b.toString(16).padStart(2, '0')).join('');
+  else
+    raw = `${Date.now().toString(16)}${Array.from({ length: 20 }, () => Math.floor(Math.random() * 16).toString(16)).join('')}`;
   return `${prefix}${raw}`.slice(0, 36);
 }

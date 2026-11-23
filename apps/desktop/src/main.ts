@@ -10,7 +10,21 @@
  *    If encryption is unavailable they are kept in memory only — never written in plain text.
  *  - Navigation and window.open are locked down; external links open in the default browser.
  */
-import { BrowserWindow, Menu, Notification, app, ipcMain, nativeTheme, net, protocol, safeStorage, screen, session, shell, type IpcMainInvokeEvent } from 'electron';
+import {
+  BrowserWindow,
+  Menu,
+  Notification,
+  app,
+  ipcMain,
+  nativeTheme,
+  net,
+  protocol,
+  safeStorage,
+  screen,
+  session,
+  shell,
+  type IpcMainInvokeEvent,
+} from 'electron';
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { dirname, join, normalize, relative, sep } from 'node:path';
 import { pathToFileURL } from 'node:url';
@@ -22,7 +36,9 @@ const DEV_URL = process.env.ELECTRON_RENDERER_URL;
 const isDev = Boolean(DEV_URL);
 const SECURE_KEYS = new Set(['auth']);
 
-protocol.registerSchemesAsPrivileged([{ scheme: SCHEME, privileges: { standard: true, secure: true, supportFetchAPI: true, corsEnabled: false } }]);
+protocol.registerSchemesAsPrivileged([
+  { scheme: SCHEME, privileges: { standard: true, secure: true, supportFetchAPI: true, corsEnabled: false } },
+]);
 
 // ───────────────────────── configuration ─────────────────────────
 
@@ -68,8 +84,10 @@ function loadConfig(): DesktopConfig {
   const wsUrl = [process.env.GOCRYPTO_WS_URL, file.wsUrl].find(isHttpUrl) ?? 'http://localhost:4001';
   if (!app.isPackaged || process.env.GOCRYPTO_ALLOW_INSECURE === '1') return { apiUrl, wsUrl };
   // Packaged builds refuse plaintext endpoints except on loopback.
-  const secure = (u: string) => new URL(u).protocol === 'https:' || ['localhost', '127.0.0.1', '[::1]'].includes(new URL(u).hostname);
-  if (!secure(apiUrl) || !secure(wsUrl)) throw new Error('GoCrypto desktop requires HTTPS API endpoints (set apiUrl/wsUrl in config.json).');
+  const secure = (u: string) =>
+    new URL(u).protocol === 'https:' || ['localhost', '127.0.0.1', '[::1]'].includes(new URL(u).hostname);
+  if (!secure(apiUrl) || !secure(wsUrl))
+    throw new Error('GoCrypto desktop requires HTTPS API endpoints (set apiUrl/wsUrl in config.json).');
   return { apiUrl, wsUrl };
 }
 
@@ -208,7 +226,15 @@ function loadWindowState(): WindowState {
   const visible =
     s.x === undefined ||
     s.y === undefined ||
-    screen.getAllDisplays().some((d) => s.x! >= d.bounds.x - 50 && s.y! >= d.bounds.y - 50 && s.x! < d.bounds.x + d.bounds.width && s.y! < d.bounds.y + d.bounds.height);
+    screen
+      .getAllDisplays()
+      .some(
+        (d) =>
+          s.x! >= d.bounds.x - 50 &&
+          s.y! >= d.bounds.y - 50 &&
+          s.x! < d.bounds.x + d.bounds.width &&
+          s.y! < d.bounds.y + d.bounds.height,
+      );
   return visible ? s : { ...fallback, maximized: s.maximized };
 }
 
@@ -319,8 +345,12 @@ if (!app.requestSingleInstanceLock()) {
   void app.whenReady().then(() => {
     config = loadConfig();
     // Deny every permission request except notifications and sanitized clipboard writes (copy buttons).
-    session.defaultSession.setPermissionRequestHandler((_wc, permission, callback) => callback(permission === 'notifications' || permission === 'clipboard-sanitized-write'));
-    session.defaultSession.setPermissionCheckHandler((_wc, permission) => permission === 'notifications' || permission === 'clipboard-sanitized-write');
+    session.defaultSession.setPermissionRequestHandler((_wc, permission, callback) =>
+      callback(permission === 'notifications' || permission === 'clipboard-sanitized-write'),
+    );
+    session.defaultSession.setPermissionCheckHandler(
+      (_wc, permission) => permission === 'notifications' || permission === 'clipboard-sanitized-write',
+    );
     registerAppProtocol();
     registerIpc();
     buildMenu();

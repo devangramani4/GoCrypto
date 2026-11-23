@@ -62,7 +62,9 @@ export class RealtimeClient {
   async refreshAuth(): Promise<boolean> {
     const token = await this.opts.getToken();
     if (!this.socket || !token) return false;
-    return new Promise((resolve) => this.socket!.emit('auth', { token }, (r: { ok: boolean }) => resolve(r?.ok ?? false)));
+    return new Promise((resolve) =>
+      this.socket!.emit('auth', { token }, (r: { ok: boolean }) => resolve(r?.ok ?? false)),
+    );
   }
 
   /** Reconnect so the handshake carries new credentials (login/logout). */
@@ -76,7 +78,8 @@ export class RealtimeClient {
     if (!set) {
       set = new Set();
       this.handlers.set(channel, set);
-      if (!channel.startsWith('user:')) this.socket?.emit('subscribe', { channels: [channel] }, (_ack: WsSubscribeAck) => undefined);
+      if (!channel.startsWith('user:'))
+        this.socket?.emit('subscribe', { channels: [channel] }, (_ack: WsSubscribeAck) => undefined);
     }
     set.add(handler as Handler);
     return () => {

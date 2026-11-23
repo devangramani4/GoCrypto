@@ -49,7 +49,9 @@ export const usePrefs = create<PrefsState>()(
       hideSmallBalances: false,
       setTheme: (theme) => set({ theme }),
       toggleFavorite: (symbol) =>
-        set((s) => ({ favorites: s.favorites.includes(symbol) ? s.favorites.filter((x) => x !== symbol) : [...s.favorites, symbol] })),
+        set((s) => ({
+          favorites: s.favorites.includes(symbol) ? s.favorites.filter((x) => x !== symbol) : [...s.favorites, symbol],
+        })),
       setProLayout: (proLayout) => set({ proLayout }),
       setBookStep: (symbol, step) => set((s) => ({ orderBookStep: { ...s.orderBookStep, [symbol]: step } })),
       setLast: (kind, symbol) => set(kind === 'spot' ? { lastSpot: symbol } : { lastFutures: symbol }),

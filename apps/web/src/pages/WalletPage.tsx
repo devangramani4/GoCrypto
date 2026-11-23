@@ -1,6 +1,28 @@
-import type { AccountType, BalanceDto, DepositDto, LedgerEntryDto, TransferDto, WithdrawalDto } from '@gocrypto/shared-types';
+import type {
+  AccountType,
+  BalanceDto,
+  DepositDto,
+  LedgerEntryDto,
+  TransferDto,
+  WithdrawalDto,
+} from '@gocrypto/shared-types';
 import { D, formatUsd, shortAddress } from '@gocrypto/trading-utils';
-import { Alert, Button, Card, Checkbox, DataTable, Icon, Modal, Progress, Select, Skeleton, Tabs, TextInput, useToast, type Column } from '@gocrypto/ui';
+import {
+  Alert,
+  Button,
+  Card,
+  Checkbox,
+  DataTable,
+  Icon,
+  Modal,
+  Progress,
+  Select,
+  Skeleton,
+  Tabs,
+  TextInput,
+  useToast,
+  type Column,
+} from '@gocrypto/ui';
 import { useInfiniteQuery, useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useEffect, useMemo, useState } from 'react';
 import { Link, useNavigate, useSearchParams } from 'react-router';
@@ -19,7 +41,11 @@ export function WalletPage() {
   const authed = useAuthed();
   const [params, setParams] = useSearchParams();
   const navigate = useNavigate();
-  const overview = useQuery({ queryKey: ['balances', 'overview'], queryFn: () => api.wallet.overview(), enabled: authed });
+  const overview = useQuery({
+    queryKey: ['balances', 'overview'],
+    queryFn: () => api.wallet.overview(),
+    enabled: authed,
+  });
   const [account, setAccount] = useState<AccountType>('SPOT');
   const [q, setQ] = useState('');
   const hideSmall = usePrefs((s) => s.hideSmallBalances);
@@ -46,10 +72,30 @@ export function WalletPage() {
 
   const columns: Column<BalanceDto>[] = [
     { key: 'a', header: 'Asset', render: (b) => <AssetLabel asset={b.asset} /> },
-    { key: 't', header: 'Total', align: 'right', render: (b) => <span className="num">{formatNumber(b.total, 8, { trim: true })}</span> },
-    { key: 'v', header: 'Available', align: 'right', render: (b) => <span className="num">{formatNumber(b.available, 8, { trim: true })}</span> },
-    { key: 'l', header: account === 'SPOT' ? 'In orders' : 'Locked / margin', align: 'right', render: (b) => <span className="num muted">{formatNumber(b.locked, 8, { trim: true })}</span> },
-    { key: 'u', header: 'USD value', align: 'right', render: (b) => <span className="num">{formatUsd(b.usdValue)}</span> },
+    {
+      key: 't',
+      header: 'Total',
+      align: 'right',
+      render: (b) => <span className="num">{formatNumber(b.total, 8, { trim: true })}</span>,
+    },
+    {
+      key: 'v',
+      header: 'Available',
+      align: 'right',
+      render: (b) => <span className="num">{formatNumber(b.available, 8, { trim: true })}</span>,
+    },
+    {
+      key: 'l',
+      header: account === 'SPOT' ? 'In orders' : 'Locked / margin',
+      align: 'right',
+      render: (b) => <span className="num muted">{formatNumber(b.locked, 8, { trim: true })}</span>,
+    },
+    {
+      key: 'u',
+      header: 'USD value',
+      align: 'right',
+      render: (b) => <span className="num">{formatUsd(b.usdValue)}</span>,
+    },
     {
       key: 'x',
       header: '',
@@ -97,29 +143,59 @@ export function WalletPage() {
       <div className="wallet-summary">
         <Card className="wallet-summary__total">
           <span className="faint">Estimated total balance</span>
-          {overview.isLoading ? <Skeleton width={220} height={34} /> : <strong className="num wallet-summary__value">{formatUsd(o?.totalUsd ?? '0')}</strong>}
+          {overview.isLoading ? (
+            <Skeleton width={220} height={34} />
+          ) : (
+            <strong className="num wallet-summary__value">{formatUsd(o?.totalUsd ?? '0')}</strong>
+          )}
         </Card>
         {ACCOUNTS.map((a) => (
-          <button key={a} type="button" className={`wallet-acct ${account === a ? 'on' : ''}`} onClick={() => setAccount(a)}>
+          <button
+            key={a}
+            type="button"
+            className={`wallet-acct ${account === a ? 'on' : ''}`}
+            onClick={() => setAccount(a)}
+          >
             <span className="faint">{ACCOUNT_LABEL[a]}</span>
-            {overview.isLoading ? <Skeleton width={120} height={20} /> : <strong className="num">{formatUsd(o?.accounts[a]?.totalUsd ?? '0')}</strong>}
+            {overview.isLoading ? (
+              <Skeleton width={120} height={20} />
+            ) : (
+              <strong className="num">{formatUsd(o?.accounts[a]?.totalUsd ?? '0')}</strong>
+            )}
           </button>
         ))}
       </div>
 
       <Card noPadding>
         <div className="markets-toolbar">
-          <Tabs value={account} onChange={setAccount} tabs={ACCOUNTS.map((a) => ({ value: a, label: ACCOUNT_LABEL[a] }))} />
+          <Tabs
+            value={account}
+            onChange={setAccount}
+            tabs={ACCOUNTS.map((a) => ({ value: a, label: ACCOUNT_LABEL[a] }))}
+          />
           <span className="spacer" />
           <Checkbox checked={hideSmall} onChange={setHideSmall}>
             Hide balances &lt; $1
           </Checkbox>
           <div className="mlist__search" style={{ width: 180 }}>
             <Icon name="search" size={14} />
-            <input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Search asset" aria-label="Search assets" />
+            <input
+              value={q}
+              onChange={(e) => setQ(e.target.value)}
+              placeholder="Search asset"
+              aria-label="Search assets"
+            />
           </div>
         </div>
-        <DataTable columns={columns} rows={rows} rowKey={(b) => b.asset} loading={overview.isLoading} error={overview.error} onRetry={() => void overview.refetch()} empty="No balances in this account yet" />
+        <DataTable
+          columns={columns}
+          rows={rows}
+          rowKey={(b) => b.asset}
+          loading={overview.isLoading}
+          error={overview.error}
+          onRetry={() => void overview.refetch()}
+          empty="No balances in this account yet"
+        />
       </Card>
 
       <Card
@@ -137,20 +213,40 @@ export function WalletPage() {
           />
         }
       >
-        {history === 'deposits' ? <DepositHistory /> : history === 'withdrawals' ? <WithdrawalHistory /> : history === 'transfers' ? <TransferHistory /> : <LedgerHistory />}
+        {history === 'deposits' ? (
+          <DepositHistory />
+        ) : history === 'withdrawals' ? (
+          <WithdrawalHistory />
+        ) : history === 'transfers' ? (
+          <TransferHistory />
+        ) : (
+          <LedgerHistory />
+        )}
       </Card>
 
-      {transfer && <TransferModal initialAsset={transfer.asset} initialTo={transfer.to} onClose={() => setTransfer(null)} />}
+      {transfer && (
+        <TransferModal initialAsset={transfer.asset} initialTo={transfer.to} onClose={() => setTransfer(null)} />
+      )}
     </div>
   );
 }
 
 // ───────────────────────────── transfer ─────────────────────────────
 
-function TransferModal({ initialAsset, initialTo, onClose }: { initialAsset?: string; initialTo?: AccountType; onClose: () => void }) {
+function TransferModal({
+  initialAsset,
+  initialTo,
+  onClose,
+}: {
+  initialAsset?: string;
+  initialTo?: AccountType;
+  onClose: () => void;
+}) {
   const user = useSession((s) => s.user);
   const [mode, setMode] = useState<'internal' | 'user'>('internal');
-  const [from, setFrom] = useState<AccountType>(initialTo && initialTo !== 'SPOT' ? 'SPOT' : initialTo === 'SPOT' ? 'FUTURES' : 'SPOT');
+  const [from, setFrom] = useState<AccountType>(
+    initialTo && initialTo !== 'SPOT' ? 'SPOT' : initialTo === 'SPOT' ? 'FUTURES' : 'SPOT',
+  );
   const [to, setTo] = useState<AccountType>(initialTo ?? 'FUTURES');
   const [asset, setAsset] = useState(initialAsset ?? 'USDT');
   const [amount, setAmount] = useState('');
@@ -179,10 +275,21 @@ function TransferModal({ initialAsset, initialTo, onClose }: { initialAsset?: st
     mutationFn: () =>
       mode === 'internal'
         ? api.wallet.transfer({ asset, amount, from, to })
-        : api.wallet.internalTransfer({ asset, amount, recipient: recipient.trim(), note: note.trim() || undefined, pin: pin || undefined, totpCode: totp || undefined }),
+        : api.wallet.internalTransfer({
+            asset,
+            amount,
+            recipient: recipient.trim(),
+            note: note.trim() || undefined,
+            pin: pin || undefined,
+            totpCode: totp || undefined,
+          }),
     onSuccess: () => {
-      toast.success('Transfer complete', `${amount} ${asset} ${mode === 'internal' ? `${ACCOUNT_LABEL[from]} → ${ACCOUNT_LABEL[to]}` : `sent to ${recipient}`}`);
-      for (const k of ['balances', 'futures-account', 'options-account', 'portfolio', 'transfers', 'ledger']) void qc.invalidateQueries({ queryKey: [k] });
+      toast.success(
+        'Transfer complete',
+        `${amount} ${asset} ${mode === 'internal' ? `${ACCOUNT_LABEL[from]} → ${ACCOUNT_LABEL[to]}` : `sent to ${recipient}`}`,
+      );
+      for (const k of ['balances', 'futures-account', 'options-account', 'portfolio', 'transfers', 'ledger'])
+        void qc.invalidateQueries({ queryKey: [k] });
       onClose();
     },
     onError: (e) => setError(errorMessage(e)),
@@ -223,7 +330,12 @@ function TransferModal({ initialAsset, initialTo, onClose }: { initialAsset?: st
         />
         {mode === 'internal' ? (
           <div className="xfer">
-            <Select label="From" value={from} onChange={(e) => setFrom(e.target.value as AccountType)} options={ACCOUNTS.map((a) => ({ value: a, label: ACCOUNT_LABEL[a] }))} />
+            <Select
+              label="From"
+              value={from}
+              onChange={(e) => setFrom(e.target.value as AccountType)}
+              options={ACCOUNTS.map((a) => ({ value: a, label: ACCOUNT_LABEL[a] }))}
+            />
             <button
               type="button"
               className="gc-icon-btn xfer__swap"
@@ -235,15 +347,32 @@ function TransferModal({ initialAsset, initialTo, onClose }: { initialAsset?: st
             >
               <Icon name="swap" size={16} />
             </button>
-            <Select label="To" value={to} onChange={(e) => setTo(e.target.value as AccountType)} options={ACCOUNTS.map((a) => ({ value: a, label: ACCOUNT_LABEL[a] }))} />
+            <Select
+              label="To"
+              value={to}
+              onChange={(e) => setTo(e.target.value as AccountType)}
+              options={ACCOUNTS.map((a) => ({ value: a, label: ACCOUNT_LABEL[a] }))}
+            />
           </div>
         ) : (
           <>
-            <TextInput label="Recipient email or UID" value={recipient} onChange={(e) => setRecipient(e.target.value)} autoComplete="off" />
-            <Alert tone="info">Internal transfers are instant, free and irreversible. Double-check the recipient.</Alert>
+            <TextInput
+              label="Recipient email or UID"
+              value={recipient}
+              onChange={(e) => setRecipient(e.target.value)}
+              autoComplete="off"
+            />
+            <Alert tone="info">
+              Internal transfers are instant, free and irreversible. Double-check the recipient.
+            </Alert>
           </>
         )}
-        <Select label="Asset" value={asset} onChange={(e) => setAsset(e.target.value)} options={assetOptions.map((a) => ({ value: a, label: a }))} />
+        <Select
+          label="Asset"
+          value={asset}
+          onChange={(e) => setAsset(e.target.value)}
+          options={assetOptions.map((a) => ({ value: a, label: a }))}
+        />
         <DecimalInput label="Amount" unit={asset} value={amount} onChange={setAmount} decimals={8} />
         <div className="row" style={{ justifyContent: 'space-between', fontSize: 12 }}>
           <span className="faint">
@@ -256,8 +385,25 @@ function TransferModal({ initialAsset, initialTo, onClose }: { initialAsset?: st
         {mode === 'user' && (
           <>
             <TextInput label="Note (optional)" value={note} onChange={(e) => setNote(e.target.value.slice(0, 140))} />
-            {user?.hasTradingPin && <TextInput label="Security PIN" type="password" inputMode="numeric" value={pin} onChange={(e) => setPin(e.target.value.replace(/\D/g, '').slice(0, 6))} autoComplete="off" />}
-            {user?.twoFactorEnabled && <TextInput label="Authenticator code" inputMode="numeric" value={totp} onChange={(e) => setTotp(e.target.value.replace(/\D/g, '').slice(0, 6))} autoComplete="one-time-code" />}
+            {user?.hasTradingPin && (
+              <TextInput
+                label="Security PIN"
+                type="password"
+                inputMode="numeric"
+                value={pin}
+                onChange={(e) => setPin(e.target.value.replace(/\D/g, '').slice(0, 6))}
+                autoComplete="off"
+              />
+            )}
+            {user?.twoFactorEnabled && (
+              <TextInput
+                label="Authenticator code"
+                inputMode="numeric"
+                value={totp}
+                onChange={(e) => setTotp(e.target.value.replace(/\D/g, '').slice(0, 6))}
+                autoComplete="one-time-code"
+              />
+            )}
           </>
         )}
         {error && <Alert tone="error">{error}</Alert>}
@@ -302,12 +448,20 @@ export function DepositHistory() {
     initialPageParam: undefined as string | undefined,
     getNextPageParam: (l) => l.nextCursor ?? undefined,
     enabled: authed,
-    refetchInterval: (query) => (query.state.data?.pages.some((p) => p.items.some((d) => d.status === 'PENDING' || d.status === 'CONFIRMING')) ? 5000 : false),
+    refetchInterval: (query) =>
+      query.state.data?.pages.some((p) => p.items.some((d) => d.status === 'PENDING' || d.status === 'CONFIRMING'))
+        ? 5000
+        : false,
   });
   const columns: Column<DepositDto>[] = [
     { key: 't', header: 'Time', render: (d) => <span className="muted num">{fmtDateTime(d.createdAt)}</span> },
     { key: 'a', header: 'Asset', render: (d) => <AssetLabel asset={d.asset} sub={d.network} /> },
-    { key: 'm', header: 'Amount', align: 'right', render: (d) => <span className="num up">+{formatNumber(d.amount, 8, { trim: true })}</span> },
+    {
+      key: 'm',
+      header: 'Amount',
+      align: 'right',
+      render: (d) => <span className="num up">+{formatNumber(d.amount, 8, { trim: true })}</span>,
+    },
     { key: 'x', header: 'Tx hash', render: (d) => <TxHash asset={d.asset} network={d.network} tx={d.txHash} /> },
     {
       key: 'c',
@@ -319,7 +473,10 @@ export function DepositHistory() {
             {Math.min(d.confirmations, d.requiredConfirmations)}/{d.requiredConfirmations}
           </span>
           <span style={{ width: 80 }}>
-            <Progress value={(Math.min(d.confirmations, d.requiredConfirmations) / Math.max(1, d.requiredConfirmations)) * 100} tone="up" />
+            <Progress
+              value={(Math.min(d.confirmations, d.requiredConfirmations) / Math.max(1, d.requiredConfirmations)) * 100}
+              tone="up"
+            />
           </span>
         </span>
       ),
@@ -335,7 +492,9 @@ export function DepositHistory() {
       error={q.error}
       onRetry={() => void q.refetch()}
       empty="No deposits yet"
-      footer={q.hasNextPage ? <MoreButton onClick={() => void q.fetchNextPage()} loading={q.isFetchingNextPage} /> : undefined}
+      footer={
+        q.hasNextPage ? <MoreButton onClick={() => void q.fetchNextPage()} loading={q.isFetchingNextPage} /> : undefined
+      }
     />
   );
 }
@@ -362,8 +521,18 @@ export function WithdrawalHistory() {
   const columns: Column<WithdrawalDto>[] = [
     { key: 't', header: 'Time', render: (w) => <span className="muted num">{fmtDateTime(w.createdAt)}</span> },
     { key: 'a', header: 'Asset', render: (w) => <AssetLabel asset={w.asset} sub={w.network} /> },
-    { key: 'm', header: 'Amount', align: 'right', render: (w) => <span className="num down">-{formatNumber(w.amount, 8, { trim: true })}</span> },
-    { key: 'f', header: 'Fee', align: 'right', render: (w) => <span className="num muted">{formatNumber(w.fee, 8, { trim: true })}</span> },
+    {
+      key: 'm',
+      header: 'Amount',
+      align: 'right',
+      render: (w) => <span className="num down">-{formatNumber(w.amount, 8, { trim: true })}</span>,
+    },
+    {
+      key: 'f',
+      header: 'Fee',
+      align: 'right',
+      render: (w) => <span className="num muted">{formatNumber(w.fee, 8, { trim: true })}</span>,
+    },
     {
       key: 'd',
       header: 'Destination',
@@ -382,7 +551,11 @@ export function WithdrawalHistory() {
       render: (w) => (
         <span className="col" style={{ gap: 2, alignItems: 'flex-end' }}>
           <StatusBadge status={w.status} />
-          {w.reviewNote && <span className="faint" style={{ fontSize: 10 }}>{w.reviewNote}</span>}
+          {w.reviewNote && (
+            <span className="faint" style={{ fontSize: 10 }}>
+              {w.reviewNote}
+            </span>
+          )}
         </span>
       ),
     },
@@ -392,7 +565,12 @@ export function WithdrawalHistory() {
       align: 'right',
       render: (w) =>
         w.status === 'PENDING_REVIEW' ? (
-          <Button size="sm" variant="ghost" loading={cancel.isPending && cancel.variables === w.id} onClick={() => cancel.mutate(w.id)}>
+          <Button
+            size="sm"
+            variant="ghost"
+            loading={cancel.isPending && cancel.variables === w.id}
+            onClick={() => cancel.mutate(w.id)}
+          >
             Cancel
           </Button>
         ) : null,
@@ -407,7 +585,9 @@ export function WithdrawalHistory() {
       error={q.error}
       onRetry={() => void q.refetch()}
       empty="No withdrawals yet"
-      footer={q.hasNextPage ? <MoreButton onClick={() => void q.fetchNextPage()} loading={q.isFetchingNextPage} /> : undefined}
+      footer={
+        q.hasNextPage ? <MoreButton onClick={() => void q.fetchNextPage()} loading={q.isFetchingNextPage} /> : undefined
+      }
     />
   );
 }
@@ -442,7 +622,11 @@ function TransferHistory() {
       key: 'm',
       header: 'Amount',
       align: 'right',
-      render: (t) => <span className={`num ${t.direction === 'IN' ? 'up' : t.direction === 'OUT' ? 'down' : ''}`}>{`${t.direction === 'IN' ? '+' : t.direction === 'OUT' ? '-' : ''}${formatNumber(t.amount, 8, { trim: true })}`}</span>,
+      render: (t) => (
+        <span
+          className={`num ${t.direction === 'IN' ? 'up' : t.direction === 'OUT' ? 'down' : ''}`}
+        >{`${t.direction === 'IN' ? '+' : t.direction === 'OUT' ? '-' : ''}${formatNumber(t.amount, 8, { trim: true })}`}</span>
+      ),
     },
   ];
   return (
@@ -454,7 +638,9 @@ function TransferHistory() {
       error={q.error}
       onRetry={() => void q.refetch()}
       empty="No transfers yet"
-      footer={q.hasNextPage ? <MoreButton onClick={() => void q.fetchNextPage()} loading={q.isFetchingNextPage} /> : undefined}
+      footer={
+        q.hasNextPage ? <MoreButton onClick={() => void q.fetchNextPage()} loading={q.isFetchingNextPage} /> : undefined
+      }
     />
   );
 }
@@ -472,11 +658,51 @@ function LedgerHistory() {
   const columns: Column<LedgerEntryDto>[] = [
     { key: 't', header: 'Time', render: (e) => <span className="muted num">{fmtDateTime(e.createdAt)}</span> },
     { key: 'y', header: 'Type', render: (e) => <span>{humanize(e.type)}</span> },
-    { key: 'a', header: 'Asset', render: (e) => <span className="row" style={{ gap: 6 }}><strong>{e.asset}</strong><span className="faint">{e.account}</span></span> },
-    { key: 'd', header: 'Available Δ', align: 'right', render: (e) => <span className={`num ${signClass(e.availableDelta)}`}>{formatNumber(e.availableDelta, 8, { trim: true, sign: true })}</span> },
-    { key: 'l', header: 'Locked Δ', align: 'right', render: (e) => <span className="num muted">{D(e.lockedDelta).isZero() ? '—' : formatNumber(e.lockedDelta, 8, { trim: true, sign: true })}</span> },
-    { key: 'b', header: 'Balance after', align: 'right', render: (e) => <span className="num">{formatNumber(D(e.availableAfter).plus(e.lockedAfter), 8, { trim: true })}</span> },
-    { key: 'r', header: 'Reference', render: (e) => <span className="faint">{e.description ?? (e.refType ? `${humanize(e.refType)} #${e.refId}` : '—')}</span> },
+    {
+      key: 'a',
+      header: 'Asset',
+      render: (e) => (
+        <span className="row" style={{ gap: 6 }}>
+          <strong>{e.asset}</strong>
+          <span className="faint">{e.account}</span>
+        </span>
+      ),
+    },
+    {
+      key: 'd',
+      header: 'Available Δ',
+      align: 'right',
+      render: (e) => (
+        <span className={`num ${signClass(e.availableDelta)}`}>
+          {formatNumber(e.availableDelta, 8, { trim: true, sign: true })}
+        </span>
+      ),
+    },
+    {
+      key: 'l',
+      header: 'Locked Δ',
+      align: 'right',
+      render: (e) => (
+        <span className="num muted">
+          {D(e.lockedDelta).isZero() ? '—' : formatNumber(e.lockedDelta, 8, { trim: true, sign: true })}
+        </span>
+      ),
+    },
+    {
+      key: 'b',
+      header: 'Balance after',
+      align: 'right',
+      render: (e) => (
+        <span className="num">{formatNumber(D(e.availableAfter).plus(e.lockedAfter), 8, { trim: true })}</span>
+      ),
+    },
+    {
+      key: 'r',
+      header: 'Reference',
+      render: (e) => (
+        <span className="faint">{e.description ?? (e.refType ? `${humanize(e.refType)} #${e.refId}` : '—')}</span>
+      ),
+    },
   ];
   return (
     <>
@@ -487,7 +713,12 @@ function LedgerHistory() {
         <span className="spacer" />
         <div className="mlist__search" style={{ width: 160 }}>
           <Icon name="filter" size={14} />
-          <input value={asset} onChange={(e) => setAsset(e.target.value.toUpperCase().replace(/[^A-Z0-9]/g, ''))} placeholder="Asset" aria-label="Filter by asset" />
+          <input
+            value={asset}
+            onChange={(e) => setAsset(e.target.value.toUpperCase().replace(/[^A-Z0-9]/g, ''))}
+            placeholder="Asset"
+            aria-label="Filter by asset"
+          />
         </div>
       </div>
       <DataTable
@@ -498,7 +729,11 @@ function LedgerHistory() {
         error={q.error}
         onRetry={() => void q.refetch()}
         empty="No activity yet"
-        footer={q.hasNextPage ? <MoreButton onClick={() => void q.fetchNextPage()} loading={q.isFetchingNextPage} /> : undefined}
+        footer={
+          q.hasNextPage ? (
+            <MoreButton onClick={() => void q.fetchNextPage()} loading={q.isFetchingNextPage} />
+          ) : undefined
+        }
       />
     </>
   );

@@ -8,7 +8,7 @@ const versionArg = process.argv.find((a) => a.startsWith('--gocrypto-version='))
 
 const bridge = {
   platform: process.platform as 'win32' | 'darwin' | 'linux',
-  version: versionArg ? versionArg.split('=')[1] ?? '' : '',
+  version: versionArg ? (versionArg.split('=')[1] ?? '') : '',
   secureStore: {
     get: (key: string): Promise<string | null> => ipcRenderer.invoke('secure-store:get', key),
     set: (key: string, value: string | null): Promise<void> => ipcRenderer.invoke('secure-store:set', key, value),

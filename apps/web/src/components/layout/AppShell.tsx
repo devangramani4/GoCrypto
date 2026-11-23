@@ -66,11 +66,18 @@ function TopNav() {
   const [menuOpen, setMenuOpen] = useState(false);
   const loc = useLocation();
   useEffect(() => setMenuOpen(false), [loc.pathname]);
-  const target = (to: string) => (to === '/trade' ? `/trade/${lastSpot}` : to === '/futures' ? `/futures/${lastFutures}` : to);
+  const target = (to: string) =>
+    to === '/trade' ? `/trade/${lastSpot}` : to === '/futures' ? `/futures/${lastFutures}` : to;
   const links = [...NAV, ...(user ? NAV_AUTH : [])];
   return (
     <header className="topnav">
-      <button type="button" className="gc-icon-btn topnav__burger" aria-label="Menu" aria-expanded={menuOpen} onClick={() => setMenuOpen((o) => !o)}>
+      <button
+        type="button"
+        className="gc-icon-btn topnav__burger"
+        aria-label="Menu"
+        aria-expanded={menuOpen}
+        onClick={() => setMenuOpen((o) => !o)}
+      >
         <Icon name={menuOpen ? 'x' : 'grid'} size={18} />
       </button>
       <Link to="/" className="topnav__logo" aria-label="GoCrypto home">
@@ -78,7 +85,13 @@ function TopNav() {
       </Link>
       <nav className={cx('topnav__links', menuOpen && 'open')} aria-label="Primary">
         {links.map((l) => (
-          <NavLink key={l.to} to={target(l.to)} className={({ isActive }) => cx('topnav__link', (isActive || (l.match && loc.pathname.startsWith(l.match))) && 'active')}>
+          <NavLink
+            key={l.to}
+            to={target(l.to)}
+            className={({ isActive }) =>
+              cx('topnav__link', (isActive || (l.match && loc.pathname.startsWith(l.match))) && 'active')
+            }
+          >
             {l.label}
           </NavLink>
         ))}
@@ -116,7 +129,13 @@ function ThemeToggle() {
   const setTheme = usePrefs((s) => s.setTheme);
   useEffect(() => applyTheme(theme), [theme]);
   return (
-    <button type="button" className="gc-icon-btn" aria-label={`Switch to ${theme === 'dark' ? 'light' : 'dark'} theme`} title="Toggle theme" onClick={() => setTheme(theme === 'dark' ? 'light' : 'dark')}>
+    <button
+      type="button"
+      className="gc-icon-btn"
+      aria-label={`Switch to ${theme === 'dark' ? 'light' : 'dark'} theme`}
+      title="Toggle theme"
+      onClick={() => setTheme(theme === 'dark' ? 'light' : 'dark')}
+    >
       <Icon name={theme === 'dark' ? 'sun' : 'moon'} size={17} />
     </button>
   );
@@ -126,7 +145,11 @@ function NotificationsBell() {
   const { data } = useUnreadCount();
   const count = data?.count ?? 0;
   return (
-    <Link to="/notifications" className="gc-icon-btn topnav__bell" aria-label={`Notifications${count ? ` (${count} unread)` : ''}`}>
+    <Link
+      to="/notifications"
+      className="gc-icon-btn topnav__bell"
+      aria-label={`Notifications${count ? ` (${count} unread)` : ''}`}
+    >
       <Icon name="bell" size={17} />
       {count > 0 && <span className="topnav__badge">{count > 99 ? '99+' : count}</span>}
     </Link>
@@ -154,7 +177,14 @@ function UserMenu() {
   );
   return (
     <div className="menu-wrap" ref={ref}>
-      <button type="button" className="avatar" onClick={() => setOpen((o) => !o)} aria-haspopup="menu" aria-expanded={open} aria-label="Account menu">
+      <button
+        type="button"
+        className="avatar"
+        onClick={() => setOpen((o) => !o)}
+        aria-haspopup="menu"
+        aria-expanded={open}
+        aria-label="Account menu"
+      >
         {initials}
       </button>
       {open && (
@@ -229,7 +259,8 @@ export function RequireAuth({ children }: { children: ReactNode }) {
       </div>
     );
   }
-  if (status === 'anonymous') return <Navigate to={`/login?next=${encodeURIComponent(loc.pathname + loc.search)}`} replace />;
+  if (status === 'anonymous')
+    return <Navigate to={`/login?next=${encodeURIComponent(loc.pathname + loc.search)}`} replace />;
   return <>{children}</>;
 }
 

@@ -51,7 +51,12 @@ export function useTickers(type?: MarketType) {
   return query;
 }
 
-function useLive<T, E extends 'ticker' | 'orderbook' | 'mark'>(symbol: string, kind: E, fetcher: () => Promise<T>, enabled = true) {
+function useLive<T, E extends 'ticker' | 'orderbook' | 'mark'>(
+  symbol: string,
+  kind: E,
+  fetcher: () => Promise<T>,
+  enabled = true,
+) {
   const [data, setData] = useState<T | null>(null);
   const [error, setError] = useState<unknown>(null);
   useEffect(() => {
@@ -151,7 +156,11 @@ export function useUserStream(): void {
     const offs = [
       realtime.subscribe<'order'>(userChannel(user.id, 'orders'), (e) => {
         void qc.invalidateQueries({ queryKey: ['orders'] });
-        if (e.data.status === 'FILLED') toast.success(`${e.data.side === 'BUY' ? 'Buy' : 'Sell'} ${e.data.symbol} filled`, `${e.data.filledQuantity} @ ${e.data.avgPrice ?? '-'}`);
+        if (e.data.status === 'FILLED')
+          toast.success(
+            `${e.data.side === 'BUY' ? 'Buy' : 'Sell'} ${e.data.symbol} filled`,
+            `${e.data.filledQuantity} @ ${e.data.avgPrice ?? '-'}`,
+          );
         if (e.data.status === 'REJECTED' || (e.data.status === 'EXPIRED' && e.data.rejectReason)) {
           toast.error(`${e.data.symbol} order ${e.data.status.toLowerCase()}`, e.data.rejectReason ?? undefined);
         }
@@ -200,7 +209,11 @@ export function useAuthed(): boolean {
 
 export function useBalances(account: 'SPOT' | 'FUTURES' | 'OPTIONS') {
   const authed = useAuthed();
-  return useQuery({ queryKey: ['balances', account], queryFn: () => api.wallet.balances(account, true), enabled: authed });
+  return useQuery({
+    queryKey: ['balances', account],
+    queryFn: () => api.wallet.balances(account, true),
+    enabled: authed,
+  });
 }
 
 /** Available balance of one asset in one account (decimal string, "0" when unknown). */
@@ -221,12 +234,21 @@ export function useFuturesPositions() {
 
 export function useOpenOrders(marketType: MarketType) {
   const authed = useAuthed();
-  return useQuery({ queryKey: ['orders', 'open', marketType], queryFn: () => api.orders.open({ marketType }), enabled: authed });
+  return useQuery({
+    queryKey: ['orders', 'open', marketType],
+    queryFn: () => api.orders.open({ marketType }),
+    enabled: authed,
+  });
 }
 
 export function useUnreadCount() {
   const authed = useAuthed();
-  return useQuery({ queryKey: ['notifications', 'unread'], queryFn: () => api.notifications.unreadCount(), enabled: authed, refetchInterval: 60_000 });
+  return useQuery({
+    queryKey: ['notifications', 'unread'],
+    queryFn: () => api.notifications.unreadCount(),
+    enabled: authed,
+    refetchInterval: 60_000,
+  });
 }
 
 /** Live mark prices for a set of symbols (positions tables), seeded with REST values. */
@@ -235,9 +257,13 @@ export function useLiveMarks(symbols: string[], seed: Record<string, string> = {
   const key = [...new Set(symbols)].sort().join(',');
   useEffect(() => {
     if (!key) return;
-    const offs = key.split(',').map((s) =>
-      realtime.subscribe<'mark'>(marketChannel(s, 'mark'), (e) => setMarks((m) => (m[s] === e.data.markPrice ? m : { ...m, [s]: e.data.markPrice }))),
-    );
+    const offs = key
+      .split(',')
+      .map((s) =>
+        realtime.subscribe<'mark'>(marketChannel(s, 'mark'), (e) =>
+          setMarks((m) => (m[s] === e.data.markPrice ? m : { ...m, [s]: e.data.markPrice })),
+        ),
+      );
     return () => offs.forEach((off) => off());
   }, [key]);
   return marks;
@@ -249,7 +275,12 @@ export function useLiveMarks(symbols: string[], seed: Record<string, string> = {
  */
 export function useMarketMap(type?: MarketType): Map<string, MarketDto> {
   const primary = useMarkets(type ?? 'SPOT');
-  const futures = useQuery({ queryKey: ['markets', 'FUTURES'], queryFn: () => api.markets.list('FUTURES'), staleTime: 60_000, enabled: !type });
+  const futures = useQuery({
+    queryKey: ['markets', 'FUTURES'],
+    queryFn: () => api.markets.list('FUTURES'),
+    staleTime: 60_000,
+    enabled: !type,
+  });
   const a = primary.data;
   const b = type ? undefined : futures.data;
   return useMemo(() => new Map([...(a ?? []), ...(b ?? [])].map((m) => [m.symbol, m])), [a, b]);

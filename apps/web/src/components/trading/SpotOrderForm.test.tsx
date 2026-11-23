@@ -21,7 +21,18 @@ const balances = (usdt: string, btc = '0') => [
 ];
 
 const placed = (over: Record<string, unknown> = {}) => ({
-  order: { id: '1', symbol: 'BTCUSDT', side: 'BUY', type: 'LIMIT', status: 'OPEN', quantity: '0.01', filledQuantity: '0', avgPrice: null, rejectReason: null, ...over },
+  order: {
+    id: '1',
+    symbol: 'BTCUSDT',
+    side: 'BUY',
+    type: 'LIMIT',
+    status: 'OPEN',
+    quantity: '0.01',
+    filledQuantity: '0',
+    avgPrice: null,
+    rejectReason: null,
+    ...over,
+  },
   fills: [],
 });
 
@@ -48,7 +59,14 @@ describe('SpotOrderForm', () => {
     expect(await screen.findByText('Confirm buy order')).toBeInTheDocument();
     await userEvent.click(screen.getByRole('button', { name: 'Confirm buy' }));
     await waitFor(() => expect(mockApi.spot.place).toHaveBeenCalledTimes(1));
-    expect(mockApi.spot.place).toHaveBeenCalledWith({ symbol: 'BTCUSDT', side: 'BUY', type: 'LIMIT', price: '50000.00', quantity: '0.01', timeInForce: 'GTC' });
+    expect(mockApi.spot.place).toHaveBeenCalledWith({
+      symbol: 'BTCUSDT',
+      side: 'BUY',
+      type: 'LIMIT',
+      price: '50000.00',
+      quantity: '0.01',
+      timeInForce: 'GTC',
+    });
     expect(await screen.findByText('Order placed')).toBeInTheDocument();
   });
 
@@ -72,12 +90,21 @@ describe('SpotOrderForm', () => {
 
   it('sends a market buy by quote amount', async () => {
     usePrefs.setState({ confirmOrders: false });
-    mockApi.spot.place.mockResolvedValue(placed({ type: 'MARKET', status: 'FILLED', filledQuantity: '0.002', avgPrice: '50000' }));
+    mockApi.spot.place.mockResolvedValue(
+      placed({ type: 'MARKET', status: 'FILLED', filledQuantity: '0.002', avgPrice: '50000' }),
+    );
     await renderForm();
     await userEvent.click(screen.getByRole('tab', { name: 'Market' }));
     await userEvent.type(screen.getByLabelText('Total'), '100');
     await userEvent.click(screen.getByRole('button', { name: 'Buy BTC' }));
-    await waitFor(() => expect(mockApi.spot.place).toHaveBeenCalledWith({ symbol: 'BTCUSDT', side: 'BUY', type: 'MARKET', quoteQuantity: '100' }));
+    await waitFor(() =>
+      expect(mockApi.spot.place).toHaveBeenCalledWith({
+        symbol: 'BTCUSDT',
+        side: 'BUY',
+        type: 'MARKET',
+        quoteQuantity: '100',
+      }),
+    );
     expect(await screen.findByText('Order filled')).toBeInTheDocument();
   });
 
@@ -91,7 +118,9 @@ describe('SpotOrderForm', () => {
     await userEvent.click(screen.getByRole('button', { name: '50%' }));
     expect(screen.getByLabelText('Amount')).toHaveValue('0.06172');
     await userEvent.click(screen.getByRole('button', { name: 'Sell BTC' }));
-    await waitFor(() => expect(mockApi.spot.place).toHaveBeenCalledWith(expect.objectContaining({ side: 'SELL', quantity: '0.06172' })));
+    await waitFor(() =>
+      expect(mockApi.spot.place).toHaveBeenCalledWith(expect.objectContaining({ side: 'SELL', quantity: '0.06172' })),
+    );
   });
 
   it('prevents duplicate submissions while an order is in flight', async () => {

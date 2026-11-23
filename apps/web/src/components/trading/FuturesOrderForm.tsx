@@ -36,7 +36,11 @@ const COND_LABEL: Record<CondType, string> = {
 
 export function useFuturesSettings(market: MarketDto) {
   const authed = useAuthed();
-  const q = useQuery({ queryKey: ['futures-settings', market.symbol], queryFn: () => api.futures.settings(market.symbol), enabled: authed });
+  const q = useQuery({
+    queryKey: ['futures-settings', market.symbol],
+    queryFn: () => api.futures.settings(market.symbol),
+    enabled: authed,
+  });
   const fallback: FuturesSettingsDto = {
     symbol: market.symbol,
     leverage: market.futures?.defaultLeverage ?? 10,
@@ -120,7 +124,9 @@ export function FuturesOrderForm({ market }: { market: MarketDto }) {
   const maxQty = useMemo(() => {
     if (!isPositive(refPrice) || !isPositive(available)) return D(0);
     // available × leverage / price, leaving room for the taker fee on the notional.
-    const gross = D(available).mul(leverage).div(D(refPrice).mul(D(1).plus(D(market.takerFeeRate).mul(leverage))));
+    const gross = D(available)
+      .mul(leverage)
+      .div(D(refPrice).mul(D(1).plus(D(market.takerFeeRate).mul(leverage))));
     return floorToStep(gross, market.stepSize);
   }, [refPrice, available, leverage, market.stepSize, market.takerFeeRate]);
 
@@ -142,7 +148,13 @@ export function FuturesOrderForm({ market }: { market: MarketDto }) {
 
   const validate = (side: OrderSide): Errors => {
     const e: Errors = {};
-    const f = { tickSize: market.tickSize, stepSize: market.stepSize, minQty: market.minQty, maxQty: market.maxQty, minNotional: market.minNotional };
+    const f = {
+      tickSize: market.tickSize,
+      stepSize: market.stepSize,
+      minQty: market.minQty,
+      maxQty: market.maxQty,
+      minNotional: market.minNotional,
+    };
     if (needsPrice) {
       if (!isPositive(price)) e.price = 'Enter a price';
       else if (checkPrice(price, f)) e.price = FILTER_MESSAGES[checkPrice(price, f)!];
@@ -153,17 +165,27 @@ export function FuturesOrderForm({ market }: { market: MarketDto }) {
     }
     if (!isPositive(qty)) e.qty = 'Enter a size';
     else {
-      const v = checkQuantity(qty, f, type === 'MARKET') ?? (isPositive(refPrice) ? checkNotional(refPrice, qty, f) : null);
+      const v =
+        checkQuantity(qty, f, type === 'MARKET') ?? (isPositive(refPrice) ? checkNotional(refPrice, qty, f) : null);
       if (v) e.qty = FILTER_MESSAGES[v];
     }
     if (tpsl && !reduceOnly && isPositive(refPrice)) {
       const long = side === 'BUY';
-      if (tp && (long ? D(tp).lte(refPrice) : D(tp).gte(refPrice))) e.tp = `Take profit must be ${long ? 'above' : 'below'} the entry price`;
-      if (sl && (long ? D(sl).gte(refPrice) : D(sl).lte(refPrice))) e.sl = `Stop loss must be ${long ? 'below' : 'above'} the entry price`;
+      if (tp && (long ? D(tp).lte(refPrice) : D(tp).gte(refPrice)))
+        e.tp = `Take profit must be ${long ? 'above' : 'below'} the entry price`;
+      if (sl && (long ? D(sl).gte(refPrice) : D(sl).lte(refPrice)))
+        e.sl = `Stop loss must be ${long ? 'below' : 'above'} the entry price`;
       if (!tp && !sl) e.tp = 'Enter a take-profit and/or stop-loss price';
     }
-    if (!Object.keys(e).length && !reduceOnly && cost.gt(available)) e.form = `Insufficient ${settle} margin — transfer funds to your futures account`;
-    if (!Object.keys(e).length && !reduceOnly && notional.gt(0) && tiers.length && leverage > maxLeverageForNotional(tiers, notional)) {
+    if (!Object.keys(e).length && !reduceOnly && cost.gt(available))
+      e.form = `Insufficient ${settle} margin — transfer funds to your futures account`;
+    if (
+      !Object.keys(e).length &&
+      !reduceOnly &&
+      notional.gt(0) &&
+      tiers.length &&
+      leverage > maxLeverageForNotional(tiers, notional)
+    ) {
       e.form = `Position too large for ${leverage}x — reduce leverage to ${maxLeverageForNotional(tiers, notional)}x or the size`;
     }
     return e;
@@ -199,19 +221,32 @@ export function FuturesOrderForm({ market }: { market: MarketDto }) {
       if (o.status === 'REJECTED' || (o.status === 'EXPIRED' && !D(o.filledQuantity).gt(0))) {
         toast.error(`Order ${o.status.toLowerCase()}`, o.rejectReason ? humanize(o.rejectReason) : undefined);
       } else if (o.status === 'FILLED') {
-        toast.success(`${o.side === 'BUY' ? 'Long' : 'Short'} filled`, `${fmtQty(o.filledQuantity, market)} ${market.base} @ ${fmtPrice(o.avgPrice, market)}`);
+        toast.success(
+          `${o.side === 'BUY' ? 'Long' : 'Short'} filled`,
+          `${fmtQty(o.filledQuantity, market)} ${market.base} @ ${fmtPrice(o.avgPrice, market)}`,
+        );
       } else {
-        toast.success('Order placed', `${humanize(o.type)} ${o.side === 'BUY' ? 'buy/long' : 'sell/short'} ${fmtQty(o.quantity, market)} ${market.base}`);
+        toast.success(
+          'Order placed',
+          `${humanize(o.type)} ${o.side === 'BUY' ? 'buy/long' : 'sell/short'} ${fmtQty(o.quantity, market)} ${market.base}`,
+        );
       }
       setQty('');
       setPct(0);
-      for (const k of ['orders', 'positions', 'futures-account', 'balances', 'fills']) void qc.invalidateQueries({ queryKey: [k] });
+      for (const k of ['orders', 'positions', 'futures-account', 'balances', 'fills'])
+        void qc.invalidateQueries({ queryKey: [k] });
     },
     onError: (err) => {
       setConfirmSide(null);
       if (err instanceof ApiError) {
         const fe = err.fieldErrors();
-        const mapped: Errors = { price: fe.price, stopPrice: fe.stopPrice, qty: fe.quantity, tp: fe.takeProfitPrice, sl: fe.stopLossPrice };
+        const mapped: Errors = {
+          price: fe.price,
+          stopPrice: fe.stopPrice,
+          qty: fe.quantity,
+          tp: fe.takeProfitPrice,
+          sl: fe.stopLossPrice,
+        };
         if (Object.values(mapped).some(Boolean)) return setErrors(mapped);
       }
       toast.error('Order not placed', errorMessage(err));
@@ -233,17 +268,32 @@ export function FuturesOrderForm({ market }: { market: MarketDto }) {
     else send(side);
   };
 
-  const blocked = market.status !== 'TRADING' ? 'Trading on this market is currently paused.' : user && !user.tradingEnabled ? 'Trading is disabled for your account.' : null;
+  const blocked =
+    market.status !== 'TRADING'
+      ? 'Trading on this market is currently paused.'
+      : user && !user.tradingEnabled
+        ? 'Trading is disabled for your account.'
+        : null;
   const liqLong = estLiq('LONG');
   const liqShort = estLiq('SHORT');
 
   return (
     <div className="ticket">
       <div className="ticket__lev">
-        <button type="button" className="ticket__chip" onClick={() => (authed ? setModeOpen(true) : undefined)} disabled={!authed}>
+        <button
+          type="button"
+          className="ticket__chip"
+          onClick={() => (authed ? setModeOpen(true) : undefined)}
+          disabled={!authed}
+        >
           {settings.marginMode === 'CROSS' ? 'Cross' : 'Isolated'}
         </button>
-        <button type="button" className="ticket__chip ticket__chip--lev" onClick={() => (authed ? setLevOpen(true) : undefined)} disabled={!authed}>
+        <button
+          type="button"
+          className="ticket__chip ticket__chip--lev"
+          onClick={() => (authed ? setLevOpen(true) : undefined)}
+          disabled={!authed}
+        >
           {leverage}x
         </button>
       </div>
@@ -264,23 +314,47 @@ export function FuturesOrderForm({ market }: { market: MarketDto }) {
         {needsStop && (
           <>
             <div className="ticket__cond">
-              <select value={cond} onChange={(e) => setCond(e.target.value as CondType)} aria-label="Conditional order type">
+              <select
+                value={cond}
+                onChange={(e) => setCond(e.target.value as CondType)}
+                aria-label="Conditional order type"
+              >
                 {(Object.keys(COND_LABEL) as CondType[]).map((c) => (
                   <option key={c} value={c}>
                     {COND_LABEL[c]}
                   </option>
                 ))}
               </select>
-              <select value={workingType} onChange={(e) => setWorkingType(e.target.value as 'MARK_PRICE' | 'LAST_PRICE')} aria-label="Trigger price source">
+              <select
+                value={workingType}
+                onChange={(e) => setWorkingType(e.target.value as 'MARK_PRICE' | 'LAST_PRICE')}
+                aria-label="Trigger price source"
+              >
                 <option value="MARK_PRICE">Mark</option>
                 <option value="LAST_PRICE">Last</option>
               </select>
             </div>
-            <DecimalInput label="Trigger" unit={market.quote} value={stopPrice} onChange={(v) => (setStopPrice(v), setErrors({}))} decimals={market.pricePrecision} error={errors.stopPrice} name="stopPrice" />
+            <DecimalInput
+              label="Trigger"
+              unit={market.quote}
+              value={stopPrice}
+              onChange={(v) => (setStopPrice(v), setErrors({}))}
+              decimals={market.pricePrecision}
+              error={errors.stopPrice}
+              name="stopPrice"
+            />
           </>
         )}
         {needsPrice ? (
-          <DecimalInput label="Price" unit={market.quote} value={price} onChange={(v) => (setPrice(v), setErrors({}))} decimals={market.pricePrecision} error={errors.price} name="price" />
+          <DecimalInput
+            label="Price"
+            unit={market.quote}
+            value={price}
+            onChange={(v) => (setPrice(v), setErrors({}))}
+            decimals={market.pricePrecision}
+            error={errors.price}
+            name="price"
+          />
         ) : (
           !needsStop && (
             <div className="ticket__market-price">
@@ -318,7 +392,12 @@ export function FuturesOrderForm({ market }: { market: MarketDto }) {
           {needsPrice && (
             <label className="ticket__tif">
               <span className="faint">TIF</span>
-              <select value={tif} onChange={(e) => setTif(e.target.value as Tif)} disabled={postOnly && type === 'LIMIT'} aria-label="Time in force">
+              <select
+                value={tif}
+                onChange={(e) => setTif(e.target.value as Tif)}
+                disabled={postOnly && type === 'LIMIT'}
+                aria-label="Time in force"
+              >
                 <option value="GTC">GTC</option>
                 <option value="IOC">IOC</option>
                 <option value="FOK">FOK</option>
@@ -328,8 +407,26 @@ export function FuturesOrderForm({ market }: { market: MarketDto }) {
         </div>
         {tpsl && (
           <div className="ticket__tpsl">
-            <DecimalInput label="Take profit" unit={market.quote} value={tp} onChange={(v) => (setTp(v), setErrors({}))} decimals={market.pricePrecision} error={errors.tp} placeholder="Mark price" name="takeProfitPrice" />
-            <DecimalInput label="Stop loss" unit={market.quote} value={sl} onChange={(v) => (setSl(v), setErrors({}))} decimals={market.pricePrecision} error={errors.sl} placeholder="Mark price" name="stopLossPrice" />
+            <DecimalInput
+              label="Take profit"
+              unit={market.quote}
+              value={tp}
+              onChange={(v) => (setTp(v), setErrors({}))}
+              decimals={market.pricePrecision}
+              error={errors.tp}
+              placeholder="Mark price"
+              name="takeProfitPrice"
+            />
+            <DecimalInput
+              label="Stop loss"
+              unit={market.quote}
+              value={sl}
+              onChange={(v) => (setSl(v), setErrors({}))}
+              decimals={market.pricePrecision}
+              error={errors.sl}
+              placeholder="Mark price"
+              name="stopLossPrice"
+            />
           </div>
         )}
       </div>
@@ -347,8 +444,16 @@ export function FuturesOrderForm({ market }: { market: MarketDto }) {
         <InfoRow label="Cost" tip="Initial margin + estimated taker fee">
           {cost.gt(0) ? `${formatNumber(cost, 2)} ${settle}` : '—'}
         </InfoRow>
-        <InfoRow label="Est. liq. long / short" tip={settings.marginMode === 'CROSS' ? 'Cross margin: estimate using your available balance' : 'Isolated margin estimate'}>
-          <span className="up">{liqLong ? fmtPrice(liqLong.toFixed(), market) : '—'}</span> / <span className="down">{liqShort ? fmtPrice(liqShort.toFixed(), market) : '—'}</span>
+        <InfoRow
+          label="Est. liq. long / short"
+          tip={
+            settings.marginMode === 'CROSS'
+              ? 'Cross margin: estimate using your available balance'
+              : 'Isolated margin estimate'
+          }
+        >
+          <span className="up">{liqLong ? fmtPrice(liqLong.toFixed(), market) : '—'}</span> /{' '}
+          <span className="down">{liqShort ? fmtPrice(liqShort.toFixed(), market) : '—'}</span>
         </InfoRow>
       </div>
 
@@ -357,10 +462,24 @@ export function FuturesOrderForm({ market }: { market: MarketDto }) {
 
       {authed ? (
         <div className="ticket__dual">
-          <Button variant="buy" size="lg" block loading={place.isPending && place.variables === 'BUY'} disabled={Boolean(blocked) || place.isPending} onClick={() => submit('BUY')}>
+          <Button
+            variant="buy"
+            size="lg"
+            block
+            loading={place.isPending && place.variables === 'BUY'}
+            disabled={Boolean(blocked) || place.isPending}
+            onClick={() => submit('BUY')}
+          >
             {reduceOnly ? 'Close Short' : 'Open Long'}
           </Button>
-          <Button variant="sell" size="lg" block loading={place.isPending && place.variables === 'SELL'} disabled={Boolean(blocked) || place.isPending} onClick={() => submit('SELL')}>
+          <Button
+            variant="sell"
+            size="lg"
+            block
+            loading={place.isPending && place.variables === 'SELL'}
+            disabled={Boolean(blocked) || place.isPending}
+            onClick={() => submit('SELL')}
+          >
             {reduceOnly ? 'Close Long' : 'Open Short'}
           </Button>
         </div>
@@ -391,10 +510,19 @@ export function FuturesOrderForm({ market }: { market: MarketDto }) {
         <KeyValue
           items={[
             ['Contract', `${market.symbol} · Perpetual`],
-            ['Side', <span key="s" className={confirmSide === 'BUY' ? 'up' : 'down'}>{confirmSide === 'BUY' ? 'Buy / Long' : 'Sell / Short'}</span>],
+            [
+              'Side',
+              <span key="s" className={confirmSide === 'BUY' ? 'up' : 'down'}>
+                {confirmSide === 'BUY' ? 'Buy / Long' : 'Sell / Short'}
+              </span>,
+            ],
             ['Type', humanize(type)],
             ['Margin', `${settings.marginMode === 'CROSS' ? 'Cross' : 'Isolated'} · ${leverage}x`],
-            ...(needsStop ? ([['Trigger', `${fmtPrice(stopPrice, market)} (${workingType === 'MARK_PRICE' ? 'mark' : 'last'})`]] as [string, string][]) : []),
+            ...(needsStop
+              ? ([
+                  ['Trigger', `${fmtPrice(stopPrice, market)} (${workingType === 'MARK_PRICE' ? 'mark' : 'last'})`],
+                ] as [string, string][])
+              : []),
             ['Price', needsPrice ? `${fmtPrice(price, market)} ${market.quote}` : 'Market'],
             ['Size', `${fmtQty(qty, market)} ${market.base} (≈ ${formatNumber(notional, 2)} ${settle})`],
             ['Cost', `${formatNumber(cost, 2)} ${settle}`],
@@ -402,7 +530,9 @@ export function FuturesOrderForm({ market }: { market: MarketDto }) {
             ...(tpsl && sl ? ([['Stop loss', fmtPrice(sl, market)]] as [string, string][]) : []),
             [
               'Est. liq. price',
-              (confirmSide === 'BUY' ? liqLong : liqShort) ? fmtPrice((confirmSide === 'BUY' ? liqLong : liqShort)!.toFixed(), market) : '—',
+              (confirmSide === 'BUY' ? liqLong : liqShort)
+                ? fmtPrice((confirmSide === 'BUY' ? liqLong : liqShort)!.toFixed(), market)
+                : '—',
             ],
             ...(reduceOnly ? ([['Reduce-only', 'Yes']] as [string, string][]) : []),
           ]}
@@ -415,12 +545,29 @@ export function FuturesOrderForm({ market }: { market: MarketDto }) {
       </Modal>
 
       {authed && <LeverageModal open={levOpen} onClose={() => setLevOpen(false)} market={market} settings={settings} />}
-      {authed && <MarginModeModal open={modeOpen} onClose={() => setModeOpen(false)} market={market} current={settings.marginMode} />}
+      {authed && (
+        <MarginModeModal
+          open={modeOpen}
+          onClose={() => setModeOpen(false)}
+          market={market}
+          current={settings.marginMode}
+        />
+      )}
     </div>
   );
 }
 
-export function LeverageModal({ open, onClose, market, settings }: { open: boolean; onClose: () => void; market: MarketDto; settings: FuturesSettingsDto }) {
+export function LeverageModal({
+  open,
+  onClose,
+  market,
+  settings,
+}: {
+  open: boolean;
+  onClose: () => void;
+  market: MarketDto;
+  settings: FuturesSettingsDto;
+}) {
   const [lev, setLev] = useState(settings.leverage);
   const toast = useToast();
   const qc = useQueryClient();
@@ -431,7 +578,9 @@ export function LeverageModal({ open, onClose, market, settings }: { open: boole
   const marks = [1, 5, 10, 20, 25, 50, 75, 100, 125].filter((m) => m <= max);
   if (!marks.includes(max)) marks.push(max);
   const tiers = market.futures?.riskTiers ?? [];
-  const maxPosition = tiers.filter((t) => t.maxLeverage >= lev).reduce((m, t) => (D(t.maxNotional).gt(m) ? D(t.maxNotional) : m), D(0));
+  const maxPosition = tiers
+    .filter((t) => t.maxLeverage >= lev)
+    .reduce((m, t) => (D(t.maxNotional).gt(m) ? D(t.maxNotional) : m), D(0));
   const save = useMutation({
     mutationFn: () => api.futures.setLeverage(market.symbol, lev),
     onSuccess: (s) => {
@@ -458,11 +607,21 @@ export function LeverageModal({ open, onClose, market, settings }: { open: boole
     >
       <div className="lev">
         <div className="lev__value">
-          <button type="button" className="gc-icon-btn" onClick={() => setLev((l) => Math.max(1, l - 1))} aria-label="Decrease leverage">
+          <button
+            type="button"
+            className="gc-icon-btn"
+            onClick={() => setLev((l) => Math.max(1, l - 1))}
+            aria-label="Decrease leverage"
+          >
             −
           </button>
           <span className="num">{lev}x</span>
-          <button type="button" className="gc-icon-btn" onClick={() => setLev((l) => Math.min(max, l + 1))} aria-label="Increase leverage">
+          <button
+            type="button"
+            className="gc-icon-btn"
+            onClick={() => setLev((l) => Math.min(max, l + 1))}
+            aria-label="Increase leverage"
+          >
             +
           </button>
         </div>
@@ -474,7 +633,9 @@ export function LeverageModal({ open, onClose, market, settings }: { open: boole
           value={lev}
           onChange={(e) => setLev(Number(e.target.value))}
           aria-label="Leverage"
-          style={{ background: `linear-gradient(to right, var(--c-brand) ${((lev - 1) / Math.max(1, max - 1)) * 100}%, var(--c-border-strong) 0)` }}
+          style={{
+            background: `linear-gradient(to right, var(--c-brand) ${((lev - 1) / Math.max(1, max - 1)) * 100}%, var(--c-border-strong) 0)`,
+          }}
         />
         <div className="lev__marks">
           {marks.map((m) => (
@@ -484,15 +645,30 @@ export function LeverageModal({ open, onClose, market, settings }: { open: boole
           ))}
         </div>
         <p className="muted" style={{ fontSize: 12 }}>
-          Maximum position at {lev}x: <strong className="num">{maxPosition.gt(0) ? `${formatNumber(maxPosition, 0)} ${market.quote}` : '—'}</strong>
+          Maximum position at {lev}x:{' '}
+          <strong className="num">{maxPosition.gt(0) ? `${formatNumber(maxPosition, 0)} ${market.quote}` : '—'}</strong>
         </p>
-        {lev > 20 && <Alert tone="warn">Leverage above 20x significantly increases the risk of liquidation. Trade with care.</Alert>}
+        {lev > 20 && (
+          <Alert tone="warn">
+            Leverage above 20x significantly increases the risk of liquidation. Trade with care.
+          </Alert>
+        )}
       </div>
     </Modal>
   );
 }
 
-export function MarginModeModal({ open, onClose, market, current }: { open: boolean; onClose: () => void; market: MarketDto; current: MarginMode }) {
+export function MarginModeModal({
+  open,
+  onClose,
+  market,
+  current,
+}: {
+  open: boolean;
+  onClose: () => void;
+  market: MarketDto;
+  current: MarginMode;
+}) {
   const [mode, setMode] = useState<MarginMode>(current);
   const toast = useToast();
   const qc = useQueryClient();
@@ -524,7 +700,13 @@ export function MarginModeModal({ open, onClose, market, current }: { open: bool
     >
       <div className="mode-pick">
         {(['CROSS', 'ISOLATED'] as MarginMode[]).map((m) => (
-          <button key={m} type="button" className={cx('mode-pick__opt', mode === m && 'on')} onClick={() => setMode(m)} aria-pressed={mode === m}>
+          <button
+            key={m}
+            type="button"
+            className={cx('mode-pick__opt', mode === m && 'on')}
+            onClick={() => setMode(m)}
+            aria-pressed={mode === m}
+          >
             <strong>{m === 'CROSS' ? 'Cross margin' : 'Isolated margin'}</strong>
             <span className="muted">
               {m === 'CROSS'
@@ -540,4 +722,3 @@ export function MarginModeModal({ open, onClose, market, current }: { open: bool
     </Modal>
   );
 }
-

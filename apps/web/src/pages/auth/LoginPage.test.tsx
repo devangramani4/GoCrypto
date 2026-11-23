@@ -14,7 +14,13 @@ vi.mock('../../lib/api', async () => {
   return { ...actual, api: m.mockApi, realtime: m.fakeRealtime };
 });
 
-const tokens = { accessToken: 'a', refreshToken: 'r', accessTokenExpiresAt: 0, refreshTokenExpiresAt: 0, sessionId: 's' };
+const tokens = {
+  accessToken: 'a',
+  refreshToken: 'r',
+  accessTokenExpiresAt: 0,
+  refreshTokenExpiresAt: 0,
+  sessionId: 's',
+};
 
 describe('Login', () => {
   beforeEach(() => {
@@ -29,13 +35,21 @@ describe('Login', () => {
     await userEvent.type(screen.getByLabelText('Password'), 'Sup3rSecretPass');
     await userEvent.click(screen.getByRole('button', { name: 'Log in' }));
     await waitFor(() => expect(useSession.getState().status).toBe('authenticated'));
-    expect(mockApi.auth.login).toHaveBeenCalledWith({ email: 'trader@example.com', password: 'Sup3rSecretPass', deviceName: expect.any(String) });
+    expect(mockApi.auth.login).toHaveBeenCalledWith({
+      email: 'trader@example.com',
+      password: 'Sup3rSecretPass',
+      deviceName: expect.any(String),
+    });
     expect(useSession.getState().user?.id).toBe('42');
     expect(fakeRealtime.reconnect).toHaveBeenCalled();
   });
 
   it('asks for the authenticator code when 2FA is enabled', async () => {
-    mockApi.auth.login.mockResolvedValue({ status: 'MFA_REQUIRED', mfaToken: 'mfa-token', methods: ['TOTP', 'BACKUP_CODE'] });
+    mockApi.auth.login.mockResolvedValue({
+      status: 'MFA_REQUIRED',
+      mfaToken: 'mfa-token',
+      methods: ['TOTP', 'BACKUP_CODE'],
+    });
     mockApi.auth.loginMfa.mockResolvedValue({ status: 'OK', user: USER, tokens });
     renderRoute(<LoginPage />, { route: '/login', path: '/login' });
     await userEvent.type(screen.getByLabelText('Email'), 'trader@example.com');
@@ -51,7 +65,9 @@ describe('Login', () => {
   });
 
   it('shows the server error for bad credentials', async () => {
-    mockApi.auth.login.mockRejectedValue(new ApiError(401, { error: { code: 'UNAUTHORIZED', message: 'Invalid email or password' } }));
+    mockApi.auth.login.mockRejectedValue(
+      new ApiError(401, { error: { code: 'UNAUTHORIZED', message: 'Invalid email or password' } }),
+    );
     renderRoute(<LoginPage />, { route: '/login', path: '/login' });
     await userEvent.type(screen.getByLabelText('Email'), 'trader@example.com');
     await userEvent.type(screen.getByLabelText('Password'), 'wrong');
@@ -86,7 +102,11 @@ describe('Register', () => {
     await userEvent.type(screen.getByLabelText('Confirm password'), 'Str0ngPassw0rd');
     await userEvent.click(screen.getByRole('checkbox'));
     await userEvent.click(screen.getByRole('button', { name: 'Create account' }));
-    await waitFor(() => expect(mockApi.auth.register).toHaveBeenCalledWith(expect.objectContaining({ email: 'new@example.com', password: 'Str0ngPassw0rd', acceptTerms: true })));
+    await waitFor(() =>
+      expect(mockApi.auth.register).toHaveBeenCalledWith(
+        expect.objectContaining({ email: 'new@example.com', password: 'Str0ngPassw0rd', acceptTerms: true }),
+      ),
+    );
     await waitFor(() => expect(useSession.getState().status).toBe('authenticated'));
   });
 });

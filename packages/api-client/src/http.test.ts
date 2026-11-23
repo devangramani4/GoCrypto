@@ -18,7 +18,13 @@ describe('HttpClient', () => {
     const store = new MemoryTokenStore();
     store.set(tokens('a1'));
     const fetchImpl = vi.fn(async () => json(200, { ok: true }));
-    const http = new HttpClient({ baseUrl: 'http://x', tokenStore: store, platform: 'IOS', deviceId: 'dev-123', fetchImpl });
+    const http = new HttpClient({
+      baseUrl: 'http://x',
+      tokenStore: store,
+      platform: 'IOS',
+      deviceId: 'dev-123',
+      fetchImpl,
+    });
     await http.request('GET', '/api/v1/users/me', { query: { a: 1, b: undefined } });
     const [url, init] = fetchImpl.mock.calls[0] as unknown as [string, RequestInit];
     expect(url).toBe('http://x/api/v1/users/me?a=1');
@@ -36,9 +42,17 @@ describe('HttpClient', () => {
         return json(200, tokens('new'));
       }
       const auth = (init?.headers as Record<string, string>).authorization;
-      return auth === 'Bearer new' ? json(200, { ok: true }) : json(401, { error: { code: 'TOKEN_EXPIRED', message: 'expired' } });
+      return auth === 'Bearer new'
+        ? json(200, { ok: true })
+        : json(401, { error: { code: 'TOKEN_EXPIRED', message: 'expired' } });
     });
-    const http = new HttpClient({ baseUrl: '', tokenStore: store, platform: 'WEB', deviceId: 'd', fetchImpl: fetchImpl as never });
+    const http = new HttpClient({
+      baseUrl: '',
+      tokenStore: store,
+      platform: 'WEB',
+      deviceId: 'd',
+      fetchImpl: fetchImpl as never,
+    });
     const results = await Promise.all([1, 2, 3].map(() => http.request<{ ok: boolean }>('GET', '/x')));
     expect(results.every((r) => r.ok)).toBe(true);
     expect(refreshCalls).toBe(1);
@@ -47,9 +61,22 @@ describe('HttpClient', () => {
 
   it('maps error envelopes to ApiError with field errors', async () => {
     const fetchImpl = vi.fn(async () =>
-      json(400, { error: { code: 'VALIDATION_ERROR', message: 'bad', details: [{ path: '/price', message: 'Price is required' }] }, requestId: 'r1' }),
+      json(400, {
+        error: {
+          code: 'VALIDATION_ERROR',
+          message: 'bad',
+          details: [{ path: '/price', message: 'Price is required' }],
+        },
+        requestId: 'r1',
+      }),
     );
-    const http = new HttpClient({ baseUrl: '', tokenStore: new MemoryTokenStore(), platform: 'WEB', deviceId: 'd', fetchImpl });
+    const http = new HttpClient({
+      baseUrl: '',
+      tokenStore: new MemoryTokenStore(),
+      platform: 'WEB',
+      deviceId: 'd',
+      fetchImpl,
+    });
     const err = await http.request('POST', '/x', { body: {} }).catch((e: unknown) => e);
     expect(err).toBeInstanceOf(ApiError);
     expect((err as ApiError).code).toBe('VALIDATION_ERROR');
@@ -61,9 +88,18 @@ describe('HttpClient', () => {
     store.set(tokens('old'));
     const expired = vi.fn();
     const fetchImpl = vi.fn(async (url: string) =>
-      url.endsWith('/auth/refresh') ? json(401, { error: { code: 'TOKEN_REVOKED', message: 'no' } }) : json(401, { error: { code: 'TOKEN_EXPIRED', message: 'x' } }),
+      url.endsWith('/auth/refresh')
+        ? json(401, { error: { code: 'TOKEN_REVOKED', message: 'no' } })
+        : json(401, { error: { code: 'TOKEN_EXPIRED', message: 'x' } }),
     );
-    const http = new HttpClient({ baseUrl: '', tokenStore: store, platform: 'WEB', deviceId: 'd', fetchImpl: fetchImpl as never, onSessionExpired: expired });
+    const http = new HttpClient({
+      baseUrl: '',
+      tokenStore: store,
+      platform: 'WEB',
+      deviceId: 'd',
+      fetchImpl: fetchImpl as never,
+      onSessionExpired: expired,
+    });
     await expect(http.request('GET', '/x')).rejects.toBeInstanceOf(ApiError);
     expect(store.get()).toBeNull();
     expect(expired).toHaveBeenCalled();

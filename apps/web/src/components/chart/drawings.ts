@@ -33,7 +33,15 @@ export class TrendLinePrimitive implements ISeriesPrimitive<Time> {
     return [
       {
         renderer: () => ({
-          draw: (target: { useBitmapCoordinateSpace: <T>(f: (s: { context: CanvasRenderingContext2D; horizontalPixelRatio: number; verticalPixelRatio: number }) => T) => T }) => {
+          draw: (target: {
+            useBitmapCoordinateSpace: <T>(
+              f: (s: {
+                context: CanvasRenderingContext2D;
+                horizontalPixelRatio: number;
+                verticalPixelRatio: number;
+              }) => T,
+            ) => T;
+          }) => {
             const p = this.param;
             if (!p) return;
             const ts = p.chart.timeScale();

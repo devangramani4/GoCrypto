@@ -1,6 +1,32 @@
-import type { ApiKeyCreatedDto, ApiKeyPermission, DeviceDto, LoginHistoryDto, NotificationCategory, NotificationChannel, NotificationPrefs, SessionDto } from '@gocrypto/shared-types';
+import type {
+  ApiKeyCreatedDto,
+  ApiKeyPermission,
+  DeviceDto,
+  LoginHistoryDto,
+  NotificationCategory,
+  NotificationChannel,
+  NotificationPrefs,
+  SessionDto,
+} from '@gocrypto/shared-types';
 import { API_KEY_PERMISSIONS, NOTIFICATION_CATEGORIES, NOTIFICATION_CHANNELS } from '@gocrypto/shared-types';
-import { Alert, Badge, Button, Card, Checkbox, DataTable, Icon, KeyValue, Modal, Progress, Segmented, Skeleton, Switch, Tabs, TextInput, useToast } from '@gocrypto/ui';
+import {
+  Alert,
+  Badge,
+  Button,
+  Card,
+  Checkbox,
+  DataTable,
+  Icon,
+  KeyValue,
+  Modal,
+  Progress,
+  Segmented,
+  Skeleton,
+  Switch,
+  Tabs,
+  TextInput,
+  useToast,
+} from '@gocrypto/ui';
 import { changePasswordSchema, pinCode } from '@gocrypto/validation';
 import { useInfiniteQuery, useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { type ReactNode, useState } from 'react';
@@ -29,7 +55,17 @@ function useRefreshUser() {
   };
 }
 
-function Section({ title, description, children, aside }: { title: string; description?: ReactNode; children: ReactNode; aside?: ReactNode }) {
+function Section({
+  title,
+  description,
+  children,
+  aside,
+}: {
+  title: string;
+  description?: ReactNode;
+  children: ReactNode;
+  aside?: ReactNode;
+}) {
   return (
     <div className="setting">
       <div className="setting__text">
@@ -97,9 +133,31 @@ function ProfileTab() {
     <Card>
       <KeyValue
         items={[
-          ['UID', <span key="u" className="row num" style={{ gap: 4 }}>{user.uid}<CopyButton value={user.uid} label="Copy UID" /></span>],
-          ['Email', <span key="e" className="row" style={{ gap: 6 }}>{user.email} {user.emailVerified ? <Badge tone="up">Verified</Badge> : <Badge tone="warn">Unverified</Badge>}</span>],
-          ['Phone', user.phone ? <span key="p" className="row" style={{ gap: 6 }}>{user.phone} {user.phoneVerified ? <Badge tone="up">Verified</Badge> : <Badge tone="warn">Unverified</Badge>}</span> : '—'],
+          [
+            'UID',
+            <span key="u" className="row num" style={{ gap: 4 }}>
+              {user.uid}
+              <CopyButton value={user.uid} label="Copy UID" />
+            </span>,
+          ],
+          [
+            'Email',
+            <span key="e" className="row" style={{ gap: 6 }}>
+              {user.email}{' '}
+              {user.emailVerified ? <Badge tone="up">Verified</Badge> : <Badge tone="warn">Unverified</Badge>}
+            </span>,
+          ],
+          [
+            'Phone',
+            user.phone ? (
+              <span key="p" className="row" style={{ gap: 6 }}>
+                {user.phone}{' '}
+                {user.phoneVerified ? <Badge tone="up">Verified</Badge> : <Badge tone="warn">Unverified</Badge>}
+              </span>
+            ) : (
+              '—'
+            ),
+          ],
           ['Verification (KYC) level', `Level ${user.kycLevel}`],
           ['VIP tier', `VIP ${user.vipTier}`],
           ['Member since', fmtDateTime(user.createdAt)],
@@ -109,7 +167,10 @@ function ProfileTab() {
       <Section title="Display name" description="Shown in your account menu and internal transfers.">
         <div className="row" style={{ gap: 8 }}>
           <TextInput value={name} onChange={(e) => setName(e.target.value)} aria-label="Display name" />
-          <Button onClick={run(() => api.users.update({ displayName: name.trim() }), 'Display name updated')} disabled={name.trim().length < 2}>
+          <Button
+            onClick={run(() => api.users.update({ displayName: name.trim() }), 'Display name updated')}
+            disabled={name.trim().length < 2}
+          >
             Save
           </Button>
         </div>
@@ -117,36 +178,99 @@ function ProfileTab() {
       {!user.emailVerified && (
         <Section title="Verify email" description="Required before withdrawals. We send a 6-digit code.">
           <div className="row" style={{ gap: 8 }}>
-            {emailSent && <TextInput value={emailCode} onChange={(e) => setEmailCode(e.target.value.replace(/\D/g, '').slice(0, 6))} placeholder="Code" inputMode="numeric" aria-label="Email code" />}
+            {emailSent && (
+              <TextInput
+                value={emailCode}
+                onChange={(e) => setEmailCode(e.target.value.replace(/\D/g, '').slice(0, 6))}
+                placeholder="Code"
+                inputMode="numeric"
+                aria-label="Email code"
+              />
+            )}
             {emailSent ? (
-              <Button variant="primary" disabled={emailCode.length !== 6} onClick={run(() => api.auth.verifyEmail(emailCode), 'Email verified')}>
+              <Button
+                variant="primary"
+                disabled={emailCode.length !== 6}
+                onClick={run(() => api.auth.verifyEmail(emailCode), 'Email verified')}
+              >
                 Verify
               </Button>
             ) : (
-              <Button onClick={run(() => api.auth.sendEmailVerification(), 'Code sent', () => setEmailSent(true))}>Send code</Button>
+              <Button
+                onClick={run(
+                  () => api.auth.sendEmailVerification(),
+                  'Code sent',
+                  () => setEmailSent(true),
+                )}
+              >
+                Send code
+              </Button>
             )}
           </div>
         </Section>
       )}
       <Section title="Phone number" description="Used for SMS security codes. International format, e.g. +14155550123.">
         <div className="row" style={{ gap: 8, flexWrap: 'wrap' }}>
-          <TextInput value={phone} onChange={(e) => setPhone(e.target.value.replace(/[^\d+]/g, ''))} placeholder="+1…" aria-label="Phone" />
-          {phoneSent && <TextInput value={phoneCode} onChange={(e) => setPhoneCode(e.target.value.replace(/\D/g, '').slice(0, 6))} placeholder="Code" inputMode="numeric" aria-label="SMS code" />}
+          <TextInput
+            value={phone}
+            onChange={(e) => setPhone(e.target.value.replace(/[^\d+]/g, ''))}
+            placeholder="+1…"
+            aria-label="Phone"
+          />
+          {phoneSent && (
+            <TextInput
+              value={phoneCode}
+              onChange={(e) => setPhoneCode(e.target.value.replace(/\D/g, '').slice(0, 6))}
+              placeholder="Code"
+              inputMode="numeric"
+              aria-label="SMS code"
+            />
+          )}
           {phoneSent ? (
-            <Button variant="primary" disabled={phoneCode.length !== 6} onClick={run(() => api.auth.verifyPhone(phone, phoneCode), 'Phone verified', () => setPhoneSent(false))}>
+            <Button
+              variant="primary"
+              disabled={phoneCode.length !== 6}
+              onClick={run(
+                () => api.auth.verifyPhone(phone, phoneCode),
+                'Phone verified',
+                () => setPhoneSent(false),
+              )}
+            >
               Verify
             </Button>
           ) : (
-            <Button disabled={phone.length < 8} onClick={run(() => api.auth.sendPhoneOtp(phone), 'Code sent', () => setPhoneSent(true))}>
+            <Button
+              disabled={phone.length < 8}
+              onClick={run(
+                () => api.auth.sendPhoneOtp(phone),
+                'Code sent',
+                () => setPhoneSent(true),
+              )}
+            >
               Send code
             </Button>
           )}
         </div>
       </Section>
-      <Section title="Anti-phishing code" description="Included in every email we send, so you can recognise genuine GoCrypto messages. 4-20 letters or digits.">
+      <Section
+        title="Anti-phishing code"
+        description="Included in every email we send, so you can recognise genuine GoCrypto messages. 4-20 letters or digits."
+      >
         <div className="row" style={{ gap: 8 }}>
-          <TextInput value={phish} onChange={(e) => setPhish(e.target.value.replace(/[^A-Za-z0-9]/g, '').slice(0, 20))} placeholder="e.g. Blue42Fox" aria-label="Anti-phishing code" />
-          <Button onClick={run(() => api.users.update({ antiPhishingCode: phish }), 'Anti-phishing code saved', () => setPhish(''))} disabled={phish.length < 4}>
+          <TextInput
+            value={phish}
+            onChange={(e) => setPhish(e.target.value.replace(/[^A-Za-z0-9]/g, '').slice(0, 20))}
+            placeholder="e.g. Blue42Fox"
+            aria-label="Anti-phishing code"
+          />
+          <Button
+            onClick={run(
+              () => api.users.update({ antiPhishingCode: phish }),
+              'Anti-phishing code saved',
+              () => setPhish(''),
+            )}
+            disabled={phish.length < 4}
+          >
             Save
           </Button>
         </div>
@@ -172,15 +296,29 @@ function SecurityTab() {
               <span className="faint">Security score</span>
               <strong className="num">{s.securityScore}/100</strong>
             </div>
-            <Progress value={s.securityScore} tone={s.securityScore >= 70 ? 'up' : s.securityScore >= 40 ? 'warn' : 'down'} />
-            {s.withdrawalLockUntil && s.withdrawalLockUntil > now && <Alert tone="warn">Withdrawals are locked until {fmtDateTime(s.withdrawalLockUntil)} after a recent security change.</Alert>}
+            <Progress
+              value={s.securityScore}
+              tone={s.securityScore >= 70 ? 'up' : s.securityScore >= 40 ? 'warn' : 'down'}
+            />
+            {s.withdrawalLockUntil && s.withdrawalLockUntil > now && (
+              <Alert tone="warn">
+                Withdrawals are locked until {fmtDateTime(s.withdrawalLockUntil)} after a recent security change.
+              </Alert>
+            )}
           </div>
         ) : (
           <Skeleton height={60} />
         )}
       </Card>
       <Card>
-        <Section title="Password" description={s?.passwordChangedAt ? `Last changed ${fmtDateTime(s.passwordChangedAt)}` : 'Use a unique password of at least 10 characters.'}>
+        <Section
+          title="Password"
+          description={
+            s?.passwordChangedAt
+              ? `Last changed ${fmtDateTime(s.passwordChangedAt)}`
+              : 'Use a unique password of at least 10 characters.'
+          }
+        >
           <Button onClick={() => setModal('password')}>Change password</Button>
         </Section>
         <Section
@@ -200,7 +338,10 @@ function SecurityTab() {
             </Button>
           )}
         </Section>
-        <Section title="Security PIN" description="6-digit PIN confirming withdrawals and transfers to other users. Locked after repeated wrong attempts.">
+        <Section
+          title="Security PIN"
+          description="6-digit PIN confirming withdrawals and transfers to other users. Locked after repeated wrong attempts."
+        >
           <span className="row" style={{ gap: 8 }}>
             {user.hasTradingPin && <Badge tone="up">Set</Badge>}
             <Button onClick={() => setModal('pin')}>{user.hasTradingPin ? 'Change PIN' : 'Set PIN'}</Button>
@@ -222,7 +363,12 @@ function ChangePasswordModal({ onClose }: { onClose: () => void }) {
   const [f, setF] = useState({ currentPassword: '', newPassword: '', confirm: '', totpCode: '' });
   const [error, setError] = useState<string | null>(null);
   const run = useMutation({
-    mutationFn: () => api.auth.changePassword({ currentPassword: f.currentPassword, newPassword: f.newPassword, totpCode: f.totpCode || undefined }),
+    mutationFn: () =>
+      api.auth.changePassword({
+        currentPassword: f.currentPassword,
+        newPassword: f.newPassword,
+        totpCode: f.totpCode || undefined,
+      }),
     onSuccess: () => {
       toast.success('Password changed', 'Other sessions were signed out. Withdrawals are paused for 24 hours.');
       onClose();
@@ -230,7 +376,11 @@ function ChangePasswordModal({ onClose }: { onClose: () => void }) {
     onError: (e) => setError(errorMessage(e)),
   });
   const submit = () => {
-    const parsed = changePasswordSchema.safeParse({ currentPassword: f.currentPassword, newPassword: f.newPassword, totpCode: f.totpCode || undefined });
+    const parsed = changePasswordSchema.safeParse({
+      currentPassword: f.currentPassword,
+      newPassword: f.newPassword,
+      totpCode: f.totpCode || undefined,
+    });
     if (!parsed.success) return setError(parsed.error.issues[0]?.message ?? 'Invalid input');
     if (f.newPassword !== f.confirm) return setError('Passwords do not match');
     setError(null);
@@ -251,10 +401,36 @@ function ChangePasswordModal({ onClose }: { onClose: () => void }) {
       }
     >
       <div className="col" style={{ gap: 12 }}>
-        <TextInput label="Current password" type="password" autoComplete="current-password" value={f.currentPassword} onChange={(e) => setF({ ...f, currentPassword: e.target.value })} />
-        <TextInput label="New password" type="password" autoComplete="new-password" value={f.newPassword} onChange={(e) => setF({ ...f, newPassword: e.target.value })} hint="10+ characters with upper- and lowercase letters and a number" />
-        <TextInput label="Confirm new password" type="password" autoComplete="new-password" value={f.confirm} onChange={(e) => setF({ ...f, confirm: e.target.value })} />
-        {user.twoFactorEnabled && <TextInput label="Authenticator code" inputMode="numeric" value={f.totpCode} onChange={(e) => setF({ ...f, totpCode: e.target.value.replace(/\D/g, '').slice(0, 6) })} />}
+        <TextInput
+          label="Current password"
+          type="password"
+          autoComplete="current-password"
+          value={f.currentPassword}
+          onChange={(e) => setF({ ...f, currentPassword: e.target.value })}
+        />
+        <TextInput
+          label="New password"
+          type="password"
+          autoComplete="new-password"
+          value={f.newPassword}
+          onChange={(e) => setF({ ...f, newPassword: e.target.value })}
+          hint="10+ characters with upper- and lowercase letters and a number"
+        />
+        <TextInput
+          label="Confirm new password"
+          type="password"
+          autoComplete="new-password"
+          value={f.confirm}
+          onChange={(e) => setF({ ...f, confirm: e.target.value })}
+        />
+        {user.twoFactorEnabled && (
+          <TextInput
+            label="Authenticator code"
+            inputMode="numeric"
+            value={f.totpCode}
+            onChange={(e) => setF({ ...f, totpCode: e.target.value.replace(/\D/g, '').slice(0, 6) })}
+          />
+        )}
         {error && <Alert tone="error">{error}</Alert>}
       </div>
     </Modal>
@@ -264,7 +440,13 @@ function ChangePasswordModal({ onClose }: { onClose: () => void }) {
 function Enable2faModal({ onClose }: { onClose: () => void }) {
   const refresh = useRefreshUser();
   const toast = useToast();
-  const setup = useQuery({ queryKey: ['2fa-setup'], queryFn: () => api.auth.setup2fa(), staleTime: Infinity, gcTime: 0, retry: false });
+  const setup = useQuery({
+    queryKey: ['2fa-setup'],
+    queryFn: () => api.auth.setup2fa(),
+    staleTime: Infinity,
+    gcTime: 0,
+    retry: false,
+  });
   const [code, setCode] = useState('');
   const [backup, setBackup] = useState<string[] | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -290,7 +472,12 @@ function Enable2faModal({ onClose }: { onClose: () => void }) {
         ) : (
           <>
             <Button onClick={onClose}>Cancel</Button>
-            <Button variant="primary" loading={enable.isPending} disabled={code.length !== 6} onClick={() => enable.mutate()}>
+            <Button
+              variant="primary"
+              loading={enable.isPending}
+              disabled={code.length !== 6}
+              onClick={() => enable.mutate()}
+            >
               Enable
             </Button>
           </>
@@ -299,7 +486,9 @@ function Enable2faModal({ onClose }: { onClose: () => void }) {
     >
       {backup ? (
         <div className="col" style={{ gap: 12 }}>
-          <Alert tone="warn">Each code can be used once if you lose access to your authenticator. They will not be shown again.</Alert>
+          <Alert tone="warn">
+            Each code can be used once if you lose access to your authenticator. They will not be shown again.
+          </Alert>
           <div className="backup-codes mono">
             {backup.map((c) => (
               <span key={c}>{c}</span>
@@ -332,7 +521,13 @@ function Enable2faModal({ onClose }: { onClose: () => void }) {
               </span>
             </div>
           </div>
-          <TextInput label="Authentication code" inputMode="numeric" autoComplete="one-time-code" value={code} onChange={(e) => setCode(e.target.value.replace(/\D/g, '').slice(0, 6))} />
+          <TextInput
+            label="Authentication code"
+            inputMode="numeric"
+            autoComplete="one-time-code"
+            value={code}
+            onChange={(e) => setCode(e.target.value.replace(/\D/g, '').slice(0, 6))}
+          />
           {error && <Alert tone="error">{error}</Alert>}
         </div>
       )}
@@ -363,7 +558,12 @@ function Disable2faModal({ onClose }: { onClose: () => void }) {
       footer={
         <>
           <Button onClick={onClose}>Cancel</Button>
-          <Button variant="danger" loading={run.isPending} disabled={code.length !== 6 || !password} onClick={() => run.mutate()}>
+          <Button
+            variant="danger"
+            loading={run.isPending}
+            disabled={code.length !== 6 || !password}
+            onClick={() => run.mutate()}
+          >
             Disable 2FA
           </Button>
         </>
@@ -371,8 +571,19 @@ function Disable2faModal({ onClose }: { onClose: () => void }) {
     >
       <div className="col" style={{ gap: 12 }}>
         <Alert tone="warn">Your account will be less secure. Withdrawals will be locked for 24 hours.</Alert>
-        <TextInput label="Password" type="password" value={password} onChange={(e) => setPassword(e.target.value)} autoComplete="current-password" />
-        <TextInput label="Authenticator code" inputMode="numeric" value={code} onChange={(e) => setCode(e.target.value.replace(/\D/g, '').slice(0, 6))} />
+        <TextInput
+          label="Password"
+          type="password"
+          value={password}
+          onChange={(e) => setPassword(e.target.value)}
+          autoComplete="current-password"
+        />
+        <TextInput
+          label="Authenticator code"
+          inputMode="numeric"
+          value={code}
+          onChange={(e) => setCode(e.target.value.replace(/\D/g, '').slice(0, 6))}
+        />
         {error && <Alert tone="error">{error}</Alert>}
       </div>
     </Modal>
@@ -418,12 +629,39 @@ function PinModal({ onClose }: { onClose: () => void }) {
     >
       <div className="col" style={{ gap: 12 }}>
         {user.hasTradingPin ? (
-          <TextInput label="Current PIN" type="password" inputMode="numeric" value={f.current} onChange={(e) => setF({ ...f, current: digits(e.target.value) })} autoComplete="off" />
+          <TextInput
+            label="Current PIN"
+            type="password"
+            inputMode="numeric"
+            value={f.current}
+            onChange={(e) => setF({ ...f, current: digits(e.target.value) })}
+            autoComplete="off"
+          />
         ) : (
-          <TextInput label="Account password" type="password" value={f.password} onChange={(e) => setF({ ...f, password: e.target.value })} autoComplete="current-password" />
+          <TextInput
+            label="Account password"
+            type="password"
+            value={f.password}
+            onChange={(e) => setF({ ...f, password: e.target.value })}
+            autoComplete="current-password"
+          />
         )}
-        <TextInput label="New PIN (6 digits)" type="password" inputMode="numeric" value={f.pin} onChange={(e) => setF({ ...f, pin: digits(e.target.value) })} autoComplete="off" />
-        <TextInput label="Confirm PIN" type="password" inputMode="numeric" value={f.confirm} onChange={(e) => setF({ ...f, confirm: digits(e.target.value) })} autoComplete="off" />
+        <TextInput
+          label="New PIN (6 digits)"
+          type="password"
+          inputMode="numeric"
+          value={f.pin}
+          onChange={(e) => setF({ ...f, pin: digits(e.target.value) })}
+          autoComplete="off"
+        />
+        <TextInput
+          label="Confirm PIN"
+          type="password"
+          inputMode="numeric"
+          value={f.confirm}
+          onChange={(e) => setF({ ...f, confirm: digits(e.target.value) })}
+          autoComplete="off"
+        />
         {error && <Alert tone="error">{error}</Alert>}
       </div>
     </Modal>
@@ -447,7 +685,16 @@ function LoginHistory() {
         empty="No logins recorded"
         columns={[
           { key: 't', header: 'Time', render: (l) => <span className="num muted">{fmtDateTime(l.createdAt)}</span> },
-          { key: 'r', header: 'Result', render: (l) => (l.success ? <Badge tone="up">Success</Badge> : <Badge tone="down">{l.reason ? humanize(l.reason) : 'Failed'}</Badge>) },
+          {
+            key: 'r',
+            header: 'Result',
+            render: (l) =>
+              l.success ? (
+                <Badge tone="up">Success</Badge>
+              ) : (
+                <Badge tone="down">{l.reason ? humanize(l.reason) : 'Failed'}</Badge>
+              ),
+          },
           { key: 'd', header: 'Device', render: (l) => <span>{l.deviceName ?? l.platform ?? '—'}</span> },
           { key: 'i', header: 'IP address', render: (l) => <span className="num">{l.ip ?? '—'}</span> },
         ]}
@@ -489,7 +736,15 @@ function DevicesTab() {
       <Card
         title="Active sessions"
         actions={
-          <Button size="sm" variant="ghost" onClick={() => act.mutate(() => api.auth.revokeOtherSessions().then((r) => toast.success(`Signed out ${r.revoked} other session(s)`)))}>
+          <Button
+            size="sm"
+            variant="ghost"
+            onClick={() =>
+              act.mutate(() =>
+                api.auth.revokeOtherSessions().then((r) => toast.success(`Signed out ${r.revoked} other session(s)`)),
+              )
+            }
+          >
             Sign out all other sessions
           </Button>
         }
@@ -513,8 +768,16 @@ function DevicesTab() {
               ),
             },
             { key: 'i', header: 'IP', render: (s) => <span className="num">{s.ip ?? '—'}</span> },
-            { key: 'c', header: 'Signed in', render: (s) => <span className="num muted">{fmtDateTime(s.createdAt)}</span> },
-            { key: 'l', header: 'Last active', render: (s) => <span className="num muted">{fmtDateTime(s.lastUsedAt)}</span> },
+            {
+              key: 'c',
+              header: 'Signed in',
+              render: (s) => <span className="num muted">{fmtDateTime(s.createdAt)}</span>,
+            },
+            {
+              key: 'l',
+              header: 'Last active',
+              render: (s) => <span className="num muted">{fmtDateTime(s.lastUsedAt)}</span>,
+            },
             {
               key: 'x',
               header: '',
@@ -549,11 +812,21 @@ function DevicesTab() {
             },
             { key: 'p', header: 'Platform', render: (d) => humanize(d.platform) },
             { key: 'i', header: 'Last IP', render: (d) => <span className="num">{d.lastIp ?? '—'}</span> },
-            { key: 's', header: 'Last seen', render: (d) => <span className="num muted">{fmtDateTime(d.lastSeenAt)}</span> },
+            {
+              key: 's',
+              header: 'Last seen',
+              render: (d) => <span className="num muted">{fmtDateTime(d.lastSeenAt)}</span>,
+            },
             {
               key: 't',
               header: 'Trusted',
-              render: (d) => <Switch checked={d.trusted} label={`Trust ${d.name ?? 'device'}`} onChange={(v) => act.mutate(() => api.auth.updateDevice(d.id, { trusted: v }))} />,
+              render: (d) => (
+                <Switch
+                  checked={d.trusted}
+                  label={`Trust ${d.name ?? 'device'}`}
+                  onChange={(v) => act.mutate(() => api.auth.updateDevice(d.id, { trusted: v }))}
+                />
+              ),
             },
             {
               key: 'x',
@@ -593,12 +866,19 @@ function ApiKeysTab() {
   return (
     <div className="col" style={{ gap: 16 }}>
       <Alert tone="info">
-        API requests are signed with HMAC-SHA256 (headers <code>X-GC-APIKEY</code>, <code>X-GC-TIMESTAMP</code>, <code>X-GC-SIGNATURE</code>). Never share your secret; restrict keys by IP whenever possible.
+        API requests are signed with HMAC-SHA256 (headers <code>X-GC-APIKEY</code>, <code>X-GC-TIMESTAMP</code>,{' '}
+        <code>X-GC-SIGNATURE</code>). Never share your secret; restrict keys by IP whenever possible.
       </Alert>
       <Card
         title="API keys"
         actions={
-          <Button variant="primary" size="sm" icon="plus" onClick={() => setCreating(true)} disabled={!user.twoFactorEnabled}>
+          <Button
+            variant="primary"
+            size="sm"
+            icon="plus"
+            onClick={() => setCreating(true)}
+            disabled={!user.twoFactorEnabled}
+          >
             Create API key
           </Button>
         }
@@ -617,7 +897,16 @@ function ApiKeysTab() {
           empty="No API keys"
           columns={[
             { key: 'l', header: 'Label', render: (k) => <strong>{k.label}</strong> },
-            { key: 'k', header: 'Key', render: (k) => <span className="row num" style={{ gap: 4 }}>{k.keyId}<CopyButton value={k.keyId} label="Copy key" /></span> },
+            {
+              key: 'k',
+              header: 'Key',
+              render: (k) => (
+                <span className="row num" style={{ gap: 4 }}>
+                  {k.keyId}
+                  <CopyButton value={k.keyId} label="Copy key" />
+                </span>
+              ),
+            },
             {
               key: 'p',
               header: 'Permissions',
@@ -631,15 +920,34 @@ function ApiKeysTab() {
                 </span>
               ),
             },
-            { key: 'i', header: 'IP allow-list', render: (k) => <span className="faint">{k.ipWhitelist.length ? k.ipWhitelist.join(', ') : 'Unrestricted'}</span> },
-            { key: 'u', header: 'Last used', render: (k) => <span className="num muted">{fmtDateTime(k.lastUsedAt)}</span> },
-            { key: 'e', header: 'Expires', render: (k) => <span className="num muted">{k.expiresAt ? fmtDateTime(k.expiresAt) : 'Never'}</span> },
+            {
+              key: 'i',
+              header: 'IP allow-list',
+              render: (k) => (
+                <span className="faint">{k.ipWhitelist.length ? k.ipWhitelist.join(', ') : 'Unrestricted'}</span>
+              ),
+            },
+            {
+              key: 'u',
+              header: 'Last used',
+              render: (k) => <span className="num muted">{fmtDateTime(k.lastUsedAt)}</span>,
+            },
+            {
+              key: 'e',
+              header: 'Expires',
+              render: (k) => <span className="num muted">{k.expiresAt ? fmtDateTime(k.expiresAt) : 'Never'}</span>,
+            },
             {
               key: 'x',
               header: '',
               align: 'right',
               render: (k) => (
-                <Button size="sm" variant="ghost" loading={revoke.isPending && revoke.variables === k.id} onClick={() => revoke.mutate(k.id)}>
+                <Button
+                  size="sm"
+                  variant="ghost"
+                  loading={revoke.isPending && revoke.variables === k.id}
+                  onClick={() => revoke.mutate(k.id)}
+                >
                   Revoke
                 </Button>
               ),
@@ -715,7 +1023,8 @@ function CreateApiKeyModal({ onClose, onCreated }: { onClose: () => void; onCrea
     onSuccess: onCreated,
     onError: (e) => setError(errorMessage(e)),
   });
-  const toggle = (p: ApiKeyPermission, on: boolean) => setPerms((xs) => (on ? [...new Set([...xs, p])] : xs.filter((x) => x !== p)));
+  const toggle = (p: ApiKeyPermission, on: boolean) =>
+    setPerms((xs) => (on ? [...new Set([...xs, p])] : xs.filter((x) => x !== p)));
   return (
     <Modal
       open
@@ -724,24 +1033,53 @@ function CreateApiKeyModal({ onClose, onCreated }: { onClose: () => void; onCrea
       footer={
         <>
           <Button onClick={onClose}>Cancel</Button>
-          <Button variant="primary" loading={run.isPending} disabled={!label.trim() || perms.length === 0 || totp.length !== 6} onClick={() => run.mutate()}>
+          <Button
+            variant="primary"
+            loading={run.isPending}
+            disabled={!label.trim() || perms.length === 0 || totp.length !== 6}
+            onClick={() => run.mutate()}
+          >
             Create
           </Button>
         </>
       }
     >
       <div className="col" style={{ gap: 12 }}>
-        <TextInput label="Label" value={label} onChange={(e) => setLabel(e.target.value.slice(0, 50))} placeholder="e.g. Trading bot" />
+        <TextInput
+          label="Label"
+          value={label}
+          onChange={(e) => setLabel(e.target.value.slice(0, 50))}
+          placeholder="e.g. Trading bot"
+        />
         <div className="col" style={{ gap: 8 }}>
           <span className="gc-field__label">Permissions</span>
           {API_KEY_PERMISSIONS.map((p) => (
             <Checkbox key={p} checked={perms.includes(p)} onChange={(v) => toggle(p, v)}>
-              <strong>{p}</strong> <span className="faint">— {p === 'READ' ? 'balances, orders and history' : p === 'TRADE' ? 'place and cancel orders' : 'request withdrawals (requires an IP allow-list)'}</span>
+              <strong>{p}</strong>{' '}
+              <span className="faint">
+                —{' '}
+                {p === 'READ'
+                  ? 'balances, orders and history'
+                  : p === 'TRADE'
+                    ? 'place and cancel orders'
+                    : 'request withdrawals (requires an IP allow-list)'}
+              </span>
             </Checkbox>
           ))}
         </div>
-        <TextInput label="IP allow-list (optional)" value={ips} onChange={(e) => setIps(e.target.value)} placeholder="203.0.113.10, 2001:db8::1" hint="Comma or space separated. Strongly recommended." />
-        <TextInput label="Authenticator code" inputMode="numeric" value={totp} onChange={(e) => setTotp(e.target.value.replace(/\D/g, '').slice(0, 6))} />
+        <TextInput
+          label="IP allow-list (optional)"
+          value={ips}
+          onChange={(e) => setIps(e.target.value)}
+          placeholder="203.0.113.10, 2001:db8::1"
+          hint="Comma or space separated. Strongly recommended."
+        />
+        <TextInput
+          label="Authenticator code"
+          inputMode="numeric"
+          value={totp}
+          onChange={(e) => setTotp(e.target.value.replace(/\D/g, '').slice(0, 6))}
+        />
         {error && <Alert tone="error">{error}</Alert>}
       </div>
     </Modal>
@@ -782,7 +1120,10 @@ function PreferencesTab() {
             ]}
           />
         </Section>
-        <Section title="Pro trading layout" description="Resizable multi-panel workspace on wide screens (always available in the desktop app).">
+        <Section
+          title="Pro trading layout"
+          description="Resizable multi-panel workspace on wide screens (always available in the desktop app)."
+        >
           <Switch checked={prefs.proLayout} onChange={prefs.setProLayout} label="Pro layout" />
         </Section>
         <Section title="Hide small balances" description="Hide wallet balances worth less than $1.">
@@ -823,7 +1164,11 @@ function PreferencesTab() {
                 <tr key={cat}>
                   <td>
                     <strong>{humanize(cat)}</strong>
-                    {cat === 'SECURITY' && <div className="faint" style={{ fontSize: 11 }}>Security emails are always sent.</div>}
+                    {cat === 'SECURITY' && (
+                      <div className="faint" style={{ fontSize: 11 }}>
+                        Security emails are always sent.
+                      </div>
+                    )}
                   </td>
                   {NOTIFICATION_CHANNELS.map((ch) => (
                     <td key={ch} className="right">

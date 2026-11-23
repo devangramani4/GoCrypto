@@ -1,4 +1,11 @@
-import { AreaSeries, ColorType, createChart, type IChartApi, type ISeriesApi, type UTCTimestamp } from 'lightweight-charts';
+import {
+  AreaSeries,
+  ColorType,
+  createChart,
+  type IChartApi,
+  type ISeriesApi,
+  type UTCTimestamp,
+} from 'lightweight-charts';
 import { useEffect, useRef } from 'react';
 import { usePrefs } from '../../stores/session';
 
@@ -14,7 +21,15 @@ function withAlpha(color: string, alpha: number): string {
 }
 
 /** Lightweight area chart for equity curves (display only — values are not used for money math). */
-export function AreaChart({ points, height = 220, tone = 'brand' }: { points: { t: number; value: string }[]; height?: number; tone?: 'brand' | 'up' | 'down' }) {
+export function AreaChart({
+  points,
+  height = 220,
+  tone = 'brand',
+}: {
+  points: { t: number; value: string }[];
+  height?: number;
+  tone?: 'brand' | 'up' | 'down';
+}) {
   const el = useRef<HTMLDivElement>(null);
   const chart = useRef<IChartApi | null>(null);
   const series = useRef<ISeriesApi<'Area'> | null>(null);
@@ -25,7 +40,13 @@ export function AreaChart({ points, height = 220, tone = 'brand' }: { points: { 
     const line = cssVar(`--c-${tone}`);
     const c = createChart(el.current, {
       autoSize: true,
-      layout: { background: { type: ColorType.Solid, color: 'transparent' }, textColor: cssVar('--c-text-faint'), fontFamily: 'Inter, system-ui, sans-serif', fontSize: 11, attributionLogo: false },
+      layout: {
+        background: { type: ColorType.Solid, color: 'transparent' },
+        textColor: cssVar('--c-text-faint'),
+        fontFamily: 'Inter, system-ui, sans-serif',
+        fontSize: 11,
+        attributionLogo: false,
+      },
       grid: { vertLines: { visible: false }, horzLines: { color: cssVar('--c-chart-grid') } },
       rightPriceScale: { borderVisible: false },
       timeScale: { borderVisible: false, timeVisible: true, secondsVisible: false },

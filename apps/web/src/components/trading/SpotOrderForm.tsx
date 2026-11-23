@@ -1,6 +1,15 @@
 import { ApiError } from '@gocrypto/api-client';
 import type { MarketDto, OrderDto, OrderSide } from '@gocrypto/shared-types';
-import { D, FILTER_MESSAGES, ROUND_DOWN, checkNotional, checkPrice, checkQuantity, floorToStep, formatNumber } from '@gocrypto/trading-utils';
+import {
+  D,
+  FILTER_MESSAGES,
+  ROUND_DOWN,
+  checkNotional,
+  checkPrice,
+  checkQuantity,
+  floorToStep,
+  formatNumber,
+} from '@gocrypto/trading-utils';
 import { Alert, Button, Checkbox, KeyValue, Modal, Segmented, Tabs, useToast } from '@gocrypto/ui';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { useEffect, useMemo, useRef, useState } from 'react';
@@ -90,9 +99,15 @@ export function SpotOrderForm({ market }: { market: MarketDto }) {
 
   const recompute = (nextQty: string, nextTotal: string, edited: 'qty' | 'total', ref: string) => {
     if (edited === 'qty') {
-      setTotal(isPositive(nextQty) && isPositive(ref) ? D(nextQty).mul(ref).toDecimalPlaces(TOTAL_DECIMALS, ROUND_DOWN).toFixed() : '');
+      setTotal(
+        isPositive(nextQty) && isPositive(ref)
+          ? D(nextQty).mul(ref).toDecimalPlaces(TOTAL_DECIMALS, ROUND_DOWN).toFixed()
+          : '',
+      );
     } else {
-      setQty(isPositive(nextTotal) && isPositive(ref) ? floorToStep(D(nextTotal).div(ref), market.stepSize).toFixed() : '');
+      setQty(
+        isPositive(nextTotal) && isPositive(ref) ? floorToStep(D(nextTotal).div(ref), market.stepSize).toFixed() : '',
+      );
     }
   };
 
@@ -158,7 +173,13 @@ export function SpotOrderForm({ market }: { market: MarketDto }) {
 
   const validate = (): Errors => {
     const e: Errors = {};
-    const f = { tickSize: market.tickSize, stepSize: market.stepSize, minQty: market.minQty, maxQty: market.maxQty, minNotional: market.minNotional };
+    const f = {
+      tickSize: market.tickSize,
+      stepSize: market.stepSize,
+      minQty: market.minQty,
+      maxQty: market.maxQty,
+      minNotional: market.minNotional,
+    };
     if (needsPrice) {
       if (!isPositive(price)) e.price = 'Enter a price';
       else {
@@ -199,8 +220,10 @@ export function SpotOrderForm({ market }: { market: MarketDto }) {
     }
     if (kind === 'OCO' && !e.form && ticker) {
       const last = D(ticker.lastPrice);
-      if (side === 'SELL' && !(D(price).gt(last) && D(stopPrice).lt(last))) e.form = 'Sell OCO: the limit price must be above and the trigger price below the last price';
-      if (side === 'BUY' && !(D(price).lt(last) && D(stopPrice).gt(last))) e.form = 'Buy OCO: the limit price must be below and the trigger price above the last price';
+      if (side === 'SELL' && !(D(price).gt(last) && D(stopPrice).lt(last)))
+        e.form = 'Sell OCO: the limit price must be above and the trigger price below the last price';
+      if (side === 'BUY' && !(D(price).lt(last) && D(stopPrice).gt(last)))
+        e.form = 'Buy OCO: the limit price must be below and the trigger price above the last price';
     }
     return e;
   };
@@ -211,7 +234,9 @@ export function SpotOrderForm({ market }: { market: MarketDto }) {
       case 'LIMIT':
         return { ...b, type: 'LIMIT', price, quantity: qty, ...(postOnly ? { postOnly: true } : { timeInForce: tif }) };
       case 'MARKET':
-        return marketBuyByQuote ? { ...b, type: 'MARKET', quoteQuantity: total } : { ...b, type: 'MARKET', quantity: qty };
+        return marketBuyByQuote
+          ? { ...b, type: 'MARKET', quoteQuantity: total }
+          : { ...b, type: 'MARKET', quantity: qty };
       case 'STOP_LIMIT':
         return { ...b, type: 'STOP_LIMIT', stopPrice, price, quantity: qty, timeInForce: tif };
       case 'STOP_MARKET':
@@ -237,9 +262,15 @@ export function SpotOrderForm({ market }: { market: MarketDto }) {
       if (o.status === 'REJECTED' || (o.status === 'EXPIRED' && !D(o.filledQuantity).gt(0))) {
         toast.error(`Order ${o.status.toLowerCase()}`, o.rejectReason ? humanize(o.rejectReason) : undefined);
       } else if (o.status === 'FILLED') {
-        toast.success('Order filled', `${o.side === 'BUY' ? 'Bought' : 'Sold'} ${fmtQty(o.filledQuantity, market)} ${market.base} @ ${fmtPrice(o.avgPrice, market)}`);
+        toast.success(
+          'Order filled',
+          `${o.side === 'BUY' ? 'Bought' : 'Sold'} ${fmtQty(o.filledQuantity, market)} ${market.base} @ ${fmtPrice(o.avgPrice, market)}`,
+        );
       } else {
-        toast.success(kind === 'OCO' ? 'OCO order placed' : 'Order placed', `${humanize(o.type)} ${o.side.toLowerCase()} ${o.quantity ? `${fmtQty(o.quantity, market)} ${market.base}` : ''}`);
+        toast.success(
+          kind === 'OCO' ? 'OCO order placed' : 'Order placed',
+          `${humanize(o.type)} ${o.side.toLowerCase()} ${o.quantity ? `${fmtQty(o.quantity, market)} ${market.base}` : ''}`,
+        );
       }
       setQty('');
       setTotal('');
@@ -284,7 +315,11 @@ export function SpotOrderForm({ market }: { market: MarketDto }) {
   };
 
   const feeRate = kind === 'LIMIT' && postOnly ? market.makerFeeRate : market.takerFeeRate;
-  const notional = marketBuyByQuote ? total : isPositive(qty) && isPositive(refPrice) ? D(qty).mul(refPrice).toFixed() : '';
+  const notional = marketBuyByQuote
+    ? total
+    : isPositive(qty) && isPositive(refPrice)
+      ? D(qty).mul(refPrice).toFixed()
+      : '';
   const maxText =
     side === 'BUY'
       ? isPositive(refPrice)
@@ -293,7 +328,12 @@ export function SpotOrderForm({ market }: { market: MarketDto }) {
       : isPositive(refPrice)
         ? `${formatNumber(D(baseAvail).mul(refPrice), 2)} ${market.quote}`
         : '—';
-  const blocked = market.status !== 'TRADING' ? 'Trading on this market is currently paused.' : user && !user.tradingEnabled ? 'Trading is disabled for your account. Contact support.' : null;
+  const blocked =
+    market.status !== 'TRADING'
+      ? 'Trading on this market is currently paused.'
+      : user && !user.tradingEnabled
+        ? 'Trading is disabled for your account. Contact support.'
+        : null;
 
   return (
     <div className="ticket">
@@ -335,10 +375,27 @@ export function SpotOrderForm({ market }: { market: MarketDto }) {
           />
         )}
         {kind === 'OCO' && (
-          <DecimalInput label="Stop limit" unit={market.quote} value={stopLimit} onChange={setStopLimit} decimals={market.pricePrecision} error={errors.stopLimit} placeholder="Market" name="stopLimit" />
+          <DecimalInput
+            label="Stop limit"
+            unit={market.quote}
+            value={stopLimit}
+            onChange={setStopLimit}
+            decimals={market.pricePrecision}
+            error={errors.stopLimit}
+            placeholder="Market"
+            name="stopLimit"
+          />
         )}
         {needsPrice ? (
-          <DecimalInput label={kind === 'OCO' ? 'Limit price' : 'Price'} unit={market.quote} value={price} onChange={onPrice} decimals={market.pricePrecision} error={errors.price} name="price" />
+          <DecimalInput
+            label={kind === 'OCO' ? 'Limit price' : 'Price'}
+            unit={market.quote}
+            value={price}
+            onChange={onPrice}
+            decimals={market.pricePrecision}
+            error={errors.price}
+            name="price"
+          />
         ) : (
           kind === 'MARKET' && (
             <div className="ticket__market-price">
@@ -347,7 +404,15 @@ export function SpotOrderForm({ market }: { market: MarketDto }) {
             </div>
           )
         )}
-        <DecimalInput label="Amount" unit={market.base} value={qty} onChange={onQty} decimals={market.qtyPrecision} error={errors.qty} name="quantity" />
+        <DecimalInput
+          label="Amount"
+          unit={market.base}
+          value={qty}
+          onChange={onQty}
+          decimals={market.qtyPrecision}
+          error={errors.qty}
+          name="quantity"
+        />
         <PercentSlider value={pct} onChange={onPct} disabled={!authed} tone={side === 'BUY' ? 'up' : 'down'} />
         <DecimalInput
           label={kind === 'MARKET' && !(side === 'BUY' && lastEdited === 'total') ? 'Total ≈' : 'Total'}
@@ -368,7 +433,12 @@ export function SpotOrderForm({ market }: { market: MarketDto }) {
             )}
             <label className="ticket__tif">
               <span className="faint">TIF</span>
-              <select value={tif} onChange={(e) => setTif(e.target.value as Tif)} disabled={postOnly && kind === 'LIMIT'} aria-label="Time in force">
+              <select
+                value={tif}
+                onChange={(e) => setTif(e.target.value as Tif)}
+                disabled={postOnly && kind === 'LIMIT'}
+                aria-label="Time in force"
+              >
                 <option value="GTC">GTC</option>
                 <option value="IOC">IOC</option>
                 <option value="FOK">FOK</option>
@@ -378,7 +448,8 @@ export function SpotOrderForm({ market }: { market: MarketDto }) {
         )}
         {needsStop && ticker && isPositive(stopPrice) && (
           <p className="ticket__hint">
-            Triggers when the last price {D(stopPrice).gte(ticker.lastPrice) ? 'rises to' : 'falls to'} {fmtPrice(stopPrice, market)} {market.quote}
+            Triggers when the last price {D(stopPrice).gte(ticker.lastPrice) ? 'rises to' : 'falls to'}{' '}
+            {fmtPrice(stopPrice, market)} {market.quote}
             {kind === 'OCO' ? '; the other leg is cancelled automatically.' : '.'}
           </p>
         )}
@@ -386,15 +457,24 @@ export function SpotOrderForm({ market }: { market: MarketDto }) {
 
       <div className="ticket__info">
         <InfoRow label="Available">
-          {authed ? `${formatNumber(available, side === 'BUY' ? 2 : market.qtyPrecision, { truncate: true })} ${side === 'BUY' ? market.quote : market.base}` : '—'}
+          {authed
+            ? `${formatNumber(available, side === 'BUY' ? 2 : market.qtyPrecision, { truncate: true })} ${side === 'BUY' ? market.quote : market.base}`
+            : '—'}
           {authed && (
-            <Link className="ticket__deposit" to={`/wallet/deposit?asset=${side === 'BUY' ? market.quote : market.base}`} aria-label="Deposit">
+            <Link
+              className="ticket__deposit"
+              to={`/wallet/deposit?asset=${side === 'BUY' ? market.quote : market.base}`}
+              aria-label="Deposit"
+            >
               +
             </Link>
           )}
         </InfoRow>
         <InfoRow label={side === 'BUY' ? 'Max buy' : 'Max sell'}>{authed ? maxText : '—'}</InfoRow>
-        <InfoRow label="Est. fee" tip={`Maker ${formatPercent(market.makerFeeRate, 3, false)} · Taker ${formatPercent(market.takerFeeRate, 3, false)} (VIP discounts applied at execution)`}>
+        <InfoRow
+          label="Est. fee"
+          tip={`Maker ${formatPercent(market.makerFeeRate, 3, false)} · Taker ${formatPercent(market.takerFeeRate, 3, false)} (VIP discounts applied at execution)`}
+        >
           {notional ? `${formatNumber(D(notional).mul(feeRate), 4)} ${market.quote}` : formatPercent(feeRate, 3, false)}
         </InfoRow>
       </div>
@@ -403,7 +483,14 @@ export function SpotOrderForm({ market }: { market: MarketDto }) {
       {errors.form && <Alert tone="error">{errors.form}</Alert>}
 
       {authed ? (
-        <Button variant={side === 'BUY' ? 'buy' : 'sell'} size="lg" block loading={place.isPending} disabled={Boolean(blocked)} onClick={submit}>
+        <Button
+          variant={side === 'BUY' ? 'buy' : 'sell'}
+          size="lg"
+          block
+          loading={place.isPending}
+          disabled={Boolean(blocked)}
+          onClick={submit}
+        >
           {side === 'BUY' ? 'Buy' : 'Sell'} {market.base}
         </Button>
       ) : (
@@ -433,13 +520,36 @@ export function SpotOrderForm({ market }: { market: MarketDto }) {
         <KeyValue
           items={[
             ['Market', `${market.base}/${market.quote} · Spot`],
-            ['Side', <span key="s" className={side === 'BUY' ? 'up' : 'down'}>{side}</span>],
+            [
+              'Side',
+              <span key="s" className={side === 'BUY' ? 'up' : 'down'}>
+                {side}
+              </span>,
+            ],
             ['Type', KINDS.find((k) => k.value === kind)!.label],
-            ...(needsStop ? ([['Trigger price', `${fmtPrice(stopPrice, market)} ${market.quote}`]] as [string, string][]) : []),
-            ...(needsPrice ? ([[kind === 'OCO' ? 'Limit price' : 'Price', `${fmtPrice(price, market)} ${market.quote}`]] as [string, string][]) : []),
-            ...(kind === 'OCO' ? ([['Stop limit', stopLimit ? `${fmtPrice(stopLimit, market)} ${market.quote}` : 'Market']] as [string, string][]) : []),
-            ['Amount', marketBuyByQuote ? `≈ ${fmtQty(qty, market)} ${market.base}` : `${fmtQty(qty, market)} ${market.base}`],
-            ['Total', `${kind === 'MARKET' && !marketBuyByQuote ? '≈ ' : ''}${formatNumber(notional || '0', 2)} ${market.quote}`],
+            ...(needsStop
+              ? ([['Trigger price', `${fmtPrice(stopPrice, market)} ${market.quote}`]] as [string, string][])
+              : []),
+            ...(needsPrice
+              ? ([[kind === 'OCO' ? 'Limit price' : 'Price', `${fmtPrice(price, market)} ${market.quote}`]] as [
+                  string,
+                  string,
+                ][])
+              : []),
+            ...(kind === 'OCO'
+              ? ([['Stop limit', stopLimit ? `${fmtPrice(stopLimit, market)} ${market.quote}` : 'Market']] as [
+                  string,
+                  string,
+                ][])
+              : []),
+            [
+              'Amount',
+              marketBuyByQuote ? `≈ ${fmtQty(qty, market)} ${market.base}` : `${fmtQty(qty, market)} ${market.base}`,
+            ],
+            [
+              'Total',
+              `${kind === 'MARKET' && !marketBuyByQuote ? '≈ ' : ''}${formatNumber(notional || '0', 2)} ${market.quote}`,
+            ],
             ...(kind === 'LIMIT' ? ([['Options', postOnly ? 'Post-only' : tif]] as [string, string][]) : []),
           ]}
         />

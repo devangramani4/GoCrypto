@@ -66,27 +66,118 @@ export function AppRoutes() {
     <>
       <SessionExpiry />
       <Routes>
-        <Route path="/login" element={<RedirectIfAuthed><LoginPage /></RedirectIfAuthed>} />
-        <Route path="/register" element={<RedirectIfAuthed><RegisterPage /></RedirectIfAuthed>} />
+        <Route
+          path="/login"
+          element={
+            <RedirectIfAuthed>
+              <LoginPage />
+            </RedirectIfAuthed>
+          }
+        />
+        <Route
+          path="/register"
+          element={
+            <RedirectIfAuthed>
+              <RegisterPage />
+            </RedirectIfAuthed>
+          }
+        />
         <Route path="/forgot-password" element={<ForgotPasswordPage />} />
         <Route element={<AppShell />}>
           <Route index element={<HomePage />} />
           <Route path="markets" element={<MarketsPage />} />
           <Route path="trade" element={<LastMarketRedirect kind="spot" />} />
-          <Route path="trade/:symbol" element={<Lazy><TradePage kind="spot" /></Lazy>} />
+          <Route
+            path="trade/:symbol"
+            element={
+              <Lazy>
+                <TradePage kind="spot" />
+              </Lazy>
+            }
+          />
           <Route path="futures" element={<LastMarketRedirect kind="futures" />} />
-          <Route path="futures/:symbol" element={<Lazy><TradePage kind="futures" /></Lazy>} />
-          <Route path="options" element={<Lazy><OptionsPage /></Lazy>} />
+          <Route
+            path="futures/:symbol"
+            element={
+              <Lazy>
+                <TradePage kind="futures" />
+              </Lazy>
+            }
+          />
+          <Route
+            path="options"
+            element={
+              <Lazy>
+                <OptionsPage />
+              </Lazy>
+            }
+          />
           <Route path="fees" element={<FeesPage />} />
-          <Route path="dashboard" element={<Private><DashboardPage /></Private>} />
-          <Route path="portfolio" element={<Private><PortfolioPage /></Private>} />
-          <Route path="wallet" element={<Private><WalletPage /></Private>} />
-          <Route path="wallet/deposit" element={<Private><DepositPage /></Private>} />
-          <Route path="wallet/withdraw" element={<Private><WithdrawPage /></Private>} />
-          <Route path="orders" element={<Private><OrdersPage /></Private>} />
-          <Route path="notifications" element={<Private><NotificationsPage /></Private>} />
+          <Route
+            path="dashboard"
+            element={
+              <Private>
+                <DashboardPage />
+              </Private>
+            }
+          />
+          <Route
+            path="portfolio"
+            element={
+              <Private>
+                <PortfolioPage />
+              </Private>
+            }
+          />
+          <Route
+            path="wallet"
+            element={
+              <Private>
+                <WalletPage />
+              </Private>
+            }
+          />
+          <Route
+            path="wallet/deposit"
+            element={
+              <Private>
+                <DepositPage />
+              </Private>
+            }
+          />
+          <Route
+            path="wallet/withdraw"
+            element={
+              <Private>
+                <WithdrawPage />
+              </Private>
+            }
+          />
+          <Route
+            path="orders"
+            element={
+              <Private>
+                <OrdersPage />
+              </Private>
+            }
+          />
+          <Route
+            path="notifications"
+            element={
+              <Private>
+                <NotificationsPage />
+              </Private>
+            }
+          />
           <Route path="account" element={<Navigate to="/account/profile" replace />} />
-          <Route path="account/:tab" element={<Private><AccountPage /></Private>} />
+          <Route
+            path="account/:tab"
+            element={
+              <Private>
+                <AccountPage />
+              </Private>
+            }
+          />
           <Route path="*" element={<NotFoundPage />} />
         </Route>
       </Routes>

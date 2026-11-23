@@ -18,7 +18,9 @@ export function signOut(): void {
 }
 
 export function renderRoute(ui: ReactElement, { route = '/', path = '/' }: { route?: string; path?: string } = {}) {
-  const client = new QueryClient({ defaultOptions: { queries: { retry: false, gcTime: Infinity }, mutations: { retry: false } } });
+  const client = new QueryClient({
+    defaultOptions: { queries: { retry: false, gcTime: Infinity }, mutations: { retry: false } },
+  });
   return render(
     <QueryClientProvider client={client}>
       <ToastProvider>
