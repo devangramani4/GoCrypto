@@ -12,7 +12,7 @@
   "scripts": {
     "dev": "tsx watch --clear-screen=false src/main.ts",
     "start": "node dist/main.js",
-    "build": "tsup src/main.ts --format esm --target node22 --out-dir dist --clean --sourcemap --no-splitting --external mysql2 --external ioredis --external bullmq --external @node-rs/argon2 --external pino --external prom-client",
+    "build": "tsup",
     "typecheck": "tsc -p tsconfig.json",
     "test": "vitest run"
   },

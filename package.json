@@ -2,7 +2,7 @@
   "name": "gocrypto",
   "version": "0.1.0",
   "private": true,
-  "description": "GoCrypto — spot, futures and options crypto trading platform (paper/sandbox by default)",
+  "description": "GoCrypto \u2014 spot, futures and options crypto trading platform (paper/sandbox by default)",
   "packageManager": "pnpm@10.28.0",
   "engines": {
     "node": ">=22.0.0"
@@ -24,7 +24,8 @@
     "db:migrate": "pnpm --filter @gocrypto/database migrate",
     "db:rollback": "pnpm --filter @gocrypto/database rollback",
     "db:seed": "pnpm --filter @gocrypto/database seed",
-    "db:reset": "pnpm --filter @gocrypto/database reset"
+    "db:reset": "pnpm --filter @gocrypto/database reset",
+    "build:backend": "pnpm --filter \"./services/*\" --filter @gocrypto/database run build"
   },
   "devDependencies": {
     "@eslint/js": "^10.0.1",
@@ -36,6 +37,7 @@
     "eslint-plugin-react-refresh": "^0.5.8",
     "globals": "^17.14.0",
     "prettier": "^3.10.1",
+    "tsup": "^8.5.1",
     "tsx": "^4.23.15",
     "typescript": "~5.9.3",
     "typescript-eslint": "^8.73.0",
@@ -47,6 +49,9 @@
       "msgpackr-extract",
       "electron",
       "esbuild"
+    ],
+    "ignoredBuiltDependencies": [
+      "electron-winstaller"
     ]
   }
 }

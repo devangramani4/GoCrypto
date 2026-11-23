@@ -11,7 +11,9 @@
     "reset": "tsx scripts/migrate.ts reset && tsx scripts/seed.ts",
     "typecheck": "tsc -p tsconfig.json",
     "test": "echo 'covered by api integration tests'",
-    "build": "echo 'nothing to build'"
+    "build": "tsup",
+    "migrate:dist": "node dist/migrate.js up",
+    "seed:dist": "node dist/seed.js"
   },
   "dependencies": {
     "@gocrypto/server-core": "workspace:*",
@@ -21,5 +23,8 @@
   "exports": {
     "./seed": "./seeds/seed.ts",
     "./data": "./seeds/data.ts"
+  },
+  "devDependencies": {
+    "tsup": "^8.5.1"
   }
 }
