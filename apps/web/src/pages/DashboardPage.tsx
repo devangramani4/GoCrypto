@@ -109,7 +109,7 @@ export function DashboardPage() {
             <Skeleton height={150} />
           )}
         </Card>
-        <Card title="Holdings" actions={<Link to="/wallet">Wallet →</Link>} noPadding className="dash-grid__hold">
+        <Card title="Spot holdings" actions={<Link to="/wallet">Wallet →</Link>} noPadding className="dash-grid__hold">
           <DataTable
             rows={holdings.data?.slice(0, 6)}
             rowKey={(h) => h.asset}

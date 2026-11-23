@@ -21,8 +21,8 @@ export function useMarkets(type?: MarketType) {
 }
 
 export function useMarket(symbol: string): MarketDto | undefined {
-  const { data } = useMarkets();
-  return useMemo(() => data?.find((m) => m.symbol === symbol), [data, symbol]);
+  const map = useMarketMap();
+  return map.get(symbol);
 }
 
 export function useAssets() {
@@ -243,10 +243,16 @@ export function useLiveMarks(symbols: string[], seed: Record<string, string> = {
   return marks;
 }
 
-/** Futures markets keyed by symbol (formatting precision, risk tiers). */
+/**
+ * Markets keyed by symbol (formatting precision, risk tiers). Without a type this covers spot and
+ * futures only — the options universe is large and option symbols format with automatic decimals.
+ */
 export function useMarketMap(type?: MarketType): Map<string, MarketDto> {
-  const { data } = useMarkets(type);
-  return useMemo(() => new Map((data ?? []).map((m) => [m.symbol, m])), [data]);
+  const primary = useMarkets(type ?? 'SPOT');
+  const futures = useQuery({ queryKey: ['markets', 'FUTURES'], queryFn: () => api.markets.list('FUTURES'), staleTime: 60_000, enabled: !type });
+  const a = primary.data;
+  const b = type ? undefined : futures.data;
+  return useMemo(() => new Map([...(a ?? []), ...(b ?? [])].map((m) => [m.symbol, m])), [a, b]);
 }
 
 /** Public platform status (sandbox flag, server clock). */

@@ -157,7 +157,7 @@ export function PortfolioPage() {
         </Card>
       </div>
 
-      <Card title="Holdings" noPadding>
+      <Card title="Spot holdings" noPadding>
         <DataTable
           rows={holdings.data}
           rowKey={(h) => h.asset}

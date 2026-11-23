@@ -1,5 +1,5 @@
 import type { OptionQuoteDto, OptionsChainRowDto, OrderSide } from '@gocrypto/shared-types';
-import { D, FILTER_MESSAGES, checkPrice, checkQuantity, formatNumber, shortOptionInitialMargin } from '@gocrypto/trading-utils';
+import { D, FILTER_MESSAGES, checkPrice, checkQuantity, dmin, formatNumber, shortOptionInitialMargin } from '@gocrypto/trading-utils';
 import { Alert, Badge, Button, Card, Checkbox, EmptyState, KeyValue, Segmented, Skeleton, Switch, Tabs, cx, useToast } from '@gocrypto/ui';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useEffect, useMemo, useRef, useState } from 'react';
@@ -21,6 +21,9 @@ interface Selection {
 function expiryLabel(ms: number): string {
   return new Date(ms).toLocaleDateString(undefined, { day: '2-digit', month: 'short', timeZone: 'UTC' }).toUpperCase();
 }
+
+/** Option premiums are quoted in USDT with 2 decimals. */
+const usdt = (v: string | null | undefined) => fmtPrice(v ?? null, { pricePrecision: 2 });
 
 function pct(iv: number | null | undefined): string {
   return iv === null || iv === undefined ? '—' : `${(iv * 100).toFixed(1)}%`;
@@ -66,16 +69,16 @@ export function OptionsPage() {
       <td key="vol" className={cls('num muted')}>{q ? formatNumber(q.volume24h, 2, { trim: true }) : '—'}</td>,
       <td key="d" className={cls('num')}>{q ? q.greeks.delta.toFixed(3) : '—'}</td>,
       <td key="iv" className={cls('num muted')}>{q ? pct(q.markIv) : '—'}</td>,
-      <td key="last" className={cls('num')}>{q?.last ? fmtPrice(q.last) : '—'}</td>,
+      <td key="last" className={cls('num')}>{q?.last ? usdt(q.last) : '—'}</td>,
       <td key="bid" className={cls('num chain__bid')}>
         <button type="button" disabled={!q?.bid} onClick={() => pick(q, type, row.strike, 'SELL', q?.bid ?? null)} title="Sell at bid">
-          {q?.bid ? fmtPrice(q.bid) : '—'}
+          {q?.bid ? usdt(q.bid) : '—'}
           {q?.bidIv != null && <small>{pct(q.bidIv)}</small>}
         </button>
       </td>,
       <td key="ask" className={cls('num chain__ask')}>
         <button type="button" disabled={!q?.ask} onClick={() => pick(q, type, row.strike, 'BUY', q?.ask ?? null)} title="Buy at ask">
-          {q?.ask ? fmtPrice(q.ask) : '—'}
+          {q?.ask ? usdt(q.ask) : '—'}
           {q?.askIv != null && <small>{pct(q.askIv)}</small>}
         </button>
       </td>,
@@ -218,7 +221,8 @@ function OptionTicket({ sel, indexPrice, onClose }: { sel: Selection; indexPrice
   const m = market.data;
   const refPrice = type === 'LIMIT' ? price : (side === 'BUY' ? sel.quote.ask : sel.quote.bid) ?? sel.quote.markPrice;
   const premium = isPositive(qty) && isPositive(refPrice) ? D(qty).mul(refPrice) : D(0);
-  const fee = premium.mul(m?.takerFeeRate ?? '0.0003');
+  // Options fee (as charged by the engine): rate × index × qty, capped at 12.5% of the premium.
+  const fee = premium.gt(0) ? dmin(D(m?.takerFeeRate ?? '0.0003').mul(indexPrice).mul(qty), premium.mul('0.125')) : D(0);
   const shortMargin =
     side === 'SELL' && isPositive(qty)
       ? shortOptionInitialMargin({ type: sel.type, indexPrice, strike: sel.strike, markPrice: sel.quote.markPrice, qty })
@@ -282,8 +286,8 @@ function OptionTicket({ sel, indexPrice, onClose }: { sel: Selection; indexPrice
       </div>
       <KeyValue
         items={[
-          ['Mark / IV', `${fmtPrice(sel.quote.markPrice)} · ${pct(sel.quote.markIv)}`],
-          ['Bid / Ask', `${sel.quote.bid ? fmtPrice(sel.quote.bid) : '—'} / ${sel.quote.ask ? fmtPrice(sel.quote.ask) : '—'}`],
+          ['Mark / IV', `${usdt(sel.quote.markPrice)} · ${pct(sel.quote.markIv)}`],
+          ['Bid / Ask', `${sel.quote.bid ? usdt(sel.quote.bid) : '—'} / ${sel.quote.ask ? usdt(sel.quote.ask) : '—'}`],
           ['Δ Γ Θ ν', `${g.delta.toFixed(3)} · ${g.gamma.toFixed(5)} · ${g.theta.toFixed(2)} · ${g.vega.toFixed(2)}`],
         ]}
       />

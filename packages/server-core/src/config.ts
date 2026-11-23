@@ -58,6 +58,8 @@ const envSchema = z.object({
   API_PUBLIC_URL: z.string().default('http://localhost:4000'),
   WEB_APP_URL: z.string().default('http://localhost:5173'),
   ADMIN_APP_URL: z.string().default('http://localhost:5174'),
+  /** Origin of the Electron renderer (custom app:// scheme), always added to CORS; set empty to disable desktop access. */
+  DESKTOP_APP_ORIGIN: z.string().default('app://gocrypto'),
   CORS_ORIGINS: csv,
   TRUST_PROXY: bool.default(false),
   WS_PORT: z.coerce.number().int().default(4001),
@@ -151,7 +153,7 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env, opts: { reload?
 
   cached = {
     ...c,
-    CORS_ORIGINS: c.CORS_ORIGINS.length ? c.CORS_ORIGINS : [c.WEB_APP_URL, c.ADMIN_APP_URL],
+    CORS_ORIGINS: [...(c.CORS_ORIGINS.length ? c.CORS_ORIGINS : [c.WEB_APP_URL, c.ADMIN_APP_URL]), ...(c.DESKTOP_APP_ORIGIN ? [c.DESKTOP_APP_ORIGIN] : [])],
     isProduction,
     isTest: c.NODE_ENV === 'test',
     isSandbox: c.TRADING_MODE === 'SANDBOX',

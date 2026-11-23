@@ -1,0 +1,53 @@
+# Packages the desktop app for Windows, macOS and Linux.
+# The renderer is the web app built with `vite build --mode desktop` into ./renderer.
+appId: com.gocrypto.desktop
+productName: GoCrypto
+copyright: Copyright © 2026 GoCrypto
+directories:
+  output: release
+  buildResources: resources
+files:
+  - dist/**/*
+  - renderer/**/*
+  - package.json
+asar: true
+extraMetadata:
+  main: dist/main.cjs
+artifactName: ${productName}-${version}-${os}-${arch}.${ext}
+
+mac:
+  category: public.app-category.finance
+  icon: resources/icon.png
+  target:
+    - target: dmg
+      arch: [x64, arm64]
+    - target: zip
+      arch: [x64, arm64]
+  hardenedRuntime: true
+  gatekeeperAssess: false
+  entitlements: resources/entitlements.mac.plist
+  entitlementsInherit: resources/entitlements.mac.plist
+  # Signing / notarization use CSC_LINK, CSC_KEY_PASSWORD, APPLE_ID, APPLE_APP_SPECIFIC_PASSWORD, APPLE_TEAM_ID from the CI environment.
+
+win:
+  icon: resources/icon.png
+  target:
+    - target: nsis
+      arch: [x64, arm64]
+  # Code signing uses WIN_CSC_LINK / WIN_CSC_KEY_PASSWORD (or Azure Trusted Signing) from the CI environment.
+
+nsis:
+  oneClick: false
+  perMachine: false
+  allowToChangeInstallationDirectory: true
+  createDesktopShortcut: true
+  shortcutName: GoCrypto
+
+linux:
+  icon: resources/icon.png
+  category: Finance
+  maintainer: GoCrypto <support@gocrypto.example>
+  synopsis: Crypto trading terminal for spot, futures and options
+  target:
+    - AppImage
+    - deb

@@ -72,6 +72,12 @@ export class FeeService {
     return rates && (!expiresAt || expiresAt > now) ? rates : null;
   }
 
+  /** Public base rates for a market (market override, else the VIP 0 schedule) — what an unknown user pays. */
+  baseRates(market: MarketInfo): FeeRates {
+    const tier = this.schedule.get(`${market.type}:0`) ?? FALLBACK[market.type];
+    return { maker: market.makerFeeRate ?? tier.maker, taker: market.takerFeeRate ?? tier.taker };
+  }
+
   async ratesFor(user: FeeSubject, market: MarketInfo): Promise<FeeRates> {
     if (user.isSystem) return { maker: '0', taker: '0' };
     const override = await this.userOverride(user.id, market.type);

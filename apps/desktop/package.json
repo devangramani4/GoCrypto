@@ -1,0 +1,27 @@
+{
+  "name": "@gocrypto/desktop",
+  "version": "0.1.0",
+  "private": true,
+  "description": "GoCrypto desktop (Electron) for Windows, macOS and Linux",
+  "main": "dist/main.cjs",
+  "scripts": {
+    "build:main": "tsup",
+    "build:renderer": "pnpm --filter @gocrypto/web build:desktop",
+    "build": "pnpm build:renderer && pnpm build:main",
+    "dev": "pnpm build:main && ELECTRON_RENDERER_URL=http://localhost:5173 electron .",
+    "start": "electron .",
+    "dist": "pnpm build && electron-builder --config electron-builder.yml",
+    "dist:win": "pnpm build && electron-builder --config electron-builder.yml --win",
+    "dist:mac": "pnpm build && electron-builder --config electron-builder.yml --mac",
+    "dist:linux": "pnpm build && electron-builder --config electron-builder.yml --linux",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "test": "echo 'renderer is covered by @gocrypto/web tests'"
+  },
+  "devDependencies": {
+    "electron": "^38.4.0",
+    "electron-builder": "^26.0.12",
+    "tsup": "^8.5.1"
+  },
+  "author": "GoCrypto",
+  "homepage": "https://gocrypto.example"
+}

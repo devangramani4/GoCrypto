@@ -126,11 +126,11 @@ export async function futuresRoutes(app: FastifyInstance, deps: ApiDeps): Promis
   const r = app.withTypeProvider<ZodTypeProvider>();
   const trade = { apiKey: 'TRADE' as const, idempotent: true, userRateLimit: orderRateLimit(core) };
 
-  r.get('/contracts', { config: { apiKey: 'READ' } }, async () => core.markets.list('FUTURES').map((m) => core.markets.toDto(m)));
+  r.get('/contracts', { config: { apiKey: 'READ' } }, async () => core.markets.list('FUTURES').map((m) => core.markets.toDto(m, core.fees.baseRates(m))));
 
   r.get('/contracts/:symbol', { schema: { params: symbolParam }, config: { apiKey: 'READ' } }, async (req) => {
     const m = core.futures.requireFutures(req.params.symbol);
-    return { contract: core.markets.toDto(m), mark: await core.prices.markPrice(m.symbol), fundingHistory: await core.funding.history(m, 24) };
+    return { contract: core.markets.toDto(m, core.fees.baseRates(m)), mark: await core.prices.markPrice(m.symbol), fundingHistory: await core.funding.history(m, 24) };
   });
 
   r.get('/account', { preHandler: authenticated, config: { apiKey: 'READ' } }, async (req) => core.futures.accountDto(requireUser(req).userId));
@@ -200,7 +200,7 @@ export async function optionsRoutes(app: FastifyInstance, deps: ApiDeps): Promis
     const m = core.markets.require(req.params.symbol, 'OPTIONS');
     const chain = await core.options.chain(m.option!.underlying, m.option!.expiryAt);
     const row = chain.rows.find((x) => x.strike === m.option!.strike);
-    return { contract: core.markets.toDto(m), quote: m.option!.optionType === 'CALL' ? row?.call : row?.put, indexPrice: chain.indexPrice };
+    return { contract: core.markets.toDto(m, core.fees.baseRates(m)), quote: m.option!.optionType === 'CALL' ? row?.call : row?.put, indexPrice: chain.indexPrice };
   });
 
   r.post('/orders', { schema: { body: optionsOrderSchema, tags: ['options'] }, preHandler: authenticated, config: { apiKey: 'TRADE', idempotent: true, userRateLimit: orderRateLimit(core) } }, async (req, reply) =>

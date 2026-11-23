@@ -1008,6 +1008,13 @@
 }
 .ticket .gc-tabs--pills {
   border-bottom: 0;
+  flex-wrap: wrap;
+  overflow: visible;
+  min-height: 0;
+}
+.ticket .gc-tabs--pills button {
+  padding: 6px 9px;
+  font-size: 12.5px;
 }
 .ticket__fields {
   display: flex;

@@ -32,7 +32,7 @@ export async function marketRoutes(app: FastifyInstance, { core }: ApiDeps): Pro
     void reply.header('cache-control', 'public, max-age=5');
     let list = core.markets.list(req.query.type).filter((m) => m.status !== 'DELISTED' && m.status !== 'SETTLED');
     if (req.query.underlying) list = list.filter((m) => (m.futures?.underlying ?? m.option?.underlying ?? m.base) === req.query.underlying);
-    return list.map((m) => core.markets.toDto(m));
+    return list.map((m) => core.markets.toDto(m, core.fees.baseRates(m)));
   });
 
   r.get('/tickers', { schema: { querystring: z.object({ type: z.enum(['SPOT', 'FUTURES', 'OPTIONS']).optional() }) }, config: { apiKey: 'READ' } }, async (req, reply) => {
@@ -40,7 +40,10 @@ export async function marketRoutes(app: FastifyInstance, { core }: ApiDeps): Pro
     return core.marketQueries.tickers(req.query.type ?? undefined);
   });
 
-  r.get('/:symbol', { schema: { params: symbolParam }, config: { apiKey: 'READ' } }, async (req) => core.markets.toDto(core.markets.require(req.params.symbol)));
+  r.get('/:symbol', { schema: { params: symbolParam }, config: { apiKey: 'READ' } }, async (req) => {
+    const m = core.markets.require(req.params.symbol);
+    return core.markets.toDto(m, core.fees.baseRates(m));
+  });
 
   r.get('/:symbol/ticker', { schema: { params: symbolParam }, config: { apiKey: 'READ' } }, async (req) => {
     const m = core.markets.require(req.params.symbol);
