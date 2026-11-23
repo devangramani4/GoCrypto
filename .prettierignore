@@ -1,0 +1,9 @@
+node_modules
+dist
+build
+coverage
+release
+pnpm-lock.yaml
+apps/desktop/renderer
+apps/mobile/.expo
+*.sql
