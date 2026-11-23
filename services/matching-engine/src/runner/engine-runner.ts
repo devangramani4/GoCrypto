@@ -77,7 +77,7 @@ export class EngineRunner {
     for (const m of this.core.markets.list()) {
       if (m.status === 'TRADING') await this.getBook(m);
     }
-    this.depthTimer = setInterval(() => this.publishDepth(), this.opts.depthIntervalMs ?? 100);
+    this.depthTimer = setInterval(() => void this.publishDepth(), this.opts.depthIntervalMs ?? 100);
     this.depthTimer.unref();
     this.sweepTimer = setInterval(() => {
       this.sweepOrphans(this.opts.orphanAgeMs ?? 5000).catch((e) => this.core.log.error({ err: e }, 'orphan sweep failed'));
@@ -91,7 +91,7 @@ export class EngineRunner {
     if (this.depthTimer) clearInterval(this.depthTimer);
     if (this.sweepTimer) clearInterval(this.sweepTimer);
     await Promise.allSettled([...this.chains.values()]);
-    this.publishDepth();
+    await this.publishDepth();
   }
 
   /** Wait until every queued command has been processed (tests, graceful shutdown). */
@@ -668,8 +668,8 @@ export class EngineRunner {
   }
 
   /** Coalesced depth publication: only books that changed since the last tick. */
-  publishDepth(): void {
-    if (!this.dirty.size) return;
+  publishDepth(): Promise<void> {
+    if (!this.dirty.size) return Promise.resolve();
     const levels = this.opts.depthLevels ?? 100;
     const pipe = this.core.redis.pub.pipeline();
     for (const id of this.dirty) {
@@ -684,6 +684,9 @@ export class EngineRunner {
       metrics.engineQueueDepth.set({ symbol: market.symbol }, this.pending.get(id) ?? 0);
     }
     this.dirty.clear();
-    pipe.exec().catch((e) => this.core.log.warn({ err: e }, 'depth publish failed'));
+    return pipe
+      .exec()
+      .then(() => undefined)
+      .catch((e) => this.core.log.warn({ err: e }, 'depth publish failed'));
   }
 }
