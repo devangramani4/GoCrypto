@@ -95,6 +95,11 @@ export class PriceService {
     return spot ? this.lastPrice(spot.symbol) : null;
   }
 
+  /** Drop the 1 s USD price cache (prices written out of band, e.g. by tests or operators). */
+  clearUsdCache(): void {
+    this.usdCache = null;
+  }
+
   /** All USD prices (cached for 1s). */
   async usdPrices(): Promise<Map<string, string>> {
     if (this.usdCache && Date.now() - this.usdCache.at < 1000) return this.usdCache.prices;

@@ -1,4 +1,4 @@
-import { type Core, type EngineGateway, OptionsLifecycleService, key } from '@gocrypto/server-core';
+import { type Core, type EngineGateway, OptionsLifecycleService, key, sweepFeeAccruals } from '@gocrypto/server-core';
 import { D } from '@gocrypto/trading-utils';
 
 /**
@@ -38,6 +38,12 @@ export class Schedulers {
     every('options-settle', 30_000, () => this.settleOptions(), true);
     every('snapshots', 60_000, () => this.snapshots(), true);
     every('maintenance', 10 * 60_000, () => this.maintenance());
+    // Move accrued trading fees into the fee collector's wallets (keeps fee revenue current within ~1s).
+    every('fee-sweep', 1_000, async () => {
+      while ((await sweepFeeAccruals(this.core)) === 5000) {
+        // drain large backlogs in consecutive batches
+      }
+    });
   }
 
   stop(): void {
@@ -86,7 +92,9 @@ export class Schedulers {
         WHERE u.is_system = 0 AND u.deleted_at IS NULL AND (w.available > 0 OR w.locked > 0)`,
     );
     for (const u of users) {
-      await this.core.portfolio.snapshot(String(u.id), new Date(hour)).catch((e) => this.core.log.warn({ err: e, userId: u.id }, 'snapshot failed'));
+      await this.core.portfolio
+        .snapshot(String(u.id), new Date(hour))
+        .catch((e) => this.core.log.warn({ err: e, userId: u.id }, 'snapshot failed'));
     }
     await this.core.redis.main.set(marker, String(hour));
     this.core.log.info({ users: users.length }, 'portfolio snapshots written');

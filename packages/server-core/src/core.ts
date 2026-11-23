@@ -65,10 +65,15 @@ export class Core {
   private subscriber: EventSubscriber | null = null;
   private refreshTimer: NodeJS.Timeout | null = null;
 
-  private constructor(readonly serviceName: string, opts: CoreOptions) {
+  private constructor(
+    readonly serviceName: string,
+    opts: CoreOptions,
+  ) {
     this.config = loadConfig();
     this.log = getLogger().child({ component: serviceName });
-    this.db = Database.connect(this.config.DATABASE_URL, opts.poolSize ?? this.config.DATABASE_POOL_SIZE);
+    this.db = Database.connect(this.config.DATABASE_URL, opts.poolSize ?? this.config.DATABASE_POOL_SIZE, {
+      trace: this.config.DATABASE_TRACE,
+    });
     this.redis = new RedisClients(serviceName);
     this.bus = new EventBus(this.redis.pub);
     this.lock = new RedisLock(this.redis.main);

@@ -111,14 +111,23 @@ export async function createUser(
   const res = await api(h, 'POST', '/api/v1/auth/login', { body: { email, password } });
   if (res.statusCode !== 200) throw new Error(`login failed: ${res.body}`);
   const body = res.json();
-  return { id, email, password, token: body.tokens.accessToken, sessionId: body.tokens.sessionId, refreshToken: body.tokens.refreshToken };
+  return {
+    id,
+    email,
+    password,
+    token: body.tokens.accessToken,
+    sessionId: body.tokens.sessionId,
+    refreshToken: body.tokens.refreshToken,
+  };
 }
 
 export async function credit(h: Harness, userId: string, balances: [AccountType, string, string][]): Promise<void> {
   for (const [account, asset, amount] of balances) {
     const a = h.core.assets.require(asset);
     await h.core.db.transaction((tx) =>
-      h.core.wallet.apply(tx, [{ userId, assetId: a.id, account, available: amount, type: 'ADJUSTMENT', refType: 'TEST' }]),
+      h.core.wallet.apply(tx, [
+        { userId, assetId: a.id, account, available: amount, type: 'ADJUSTMENT', refType: 'TEST' },
+      ]),
     );
   }
 }
@@ -131,6 +140,7 @@ export async function balance(h: Harness, userId: string, asset: string, account
 /** Publish index (+ mark for perps on that underlying) prices into Redis. */
 export async function setPrice(h: Harness, asset: string, price: string, markOverride?: string): Promise<void> {
   await h.core.redis.main.set(PriceService.indexKey(asset), price);
+  h.core.prices.clearUsdCache();
   for (const m of h.core.markets.list('FUTURES')) {
     if (m.futures?.underlying !== asset) continue;
     const dto: MarkPriceDto = {
@@ -152,13 +162,21 @@ export async function flushBooks(h: Harness): Promise<void> {
 
 /** Every wallet balance must equal the sum of its ledger entries (double-entry style reconciliation). */
 export async function assertLedgerReconciles(h: Harness): Promise<void> {
-  const rows = await h.core.db.query<{ id: string; available: string; locked: string; la: string | null; ll: string | null }>(
+  const rows = await h.core.db.query<{
+    id: string;
+    available: string;
+    locked: string;
+    la: string | null;
+    ll: string | null;
+  }>(
     `SELECT w.id, w.available, w.locked, SUM(t.available_delta) AS la, SUM(t.locked_delta) AS ll
        FROM wallets w LEFT JOIN wallet_transactions t ON t.wallet_id = w.id GROUP BY w.id`,
   );
   for (const r of rows) {
     if (!D(r.available).eq(D(r.la ?? 0)) || !D(r.locked).eq(D(r.ll ?? 0))) {
-      throw new Error(`wallet ${r.id} does not reconcile: balance ${r.available}/${r.locked} vs ledger ${r.la}/${r.ll}`);
+      throw new Error(
+        `wallet ${r.id} does not reconcile: balance ${r.available}/${r.locked} vs ledger ${r.la}/${r.ll}`,
+      );
     }
     if (D(r.available).isNegative() || D(r.locked).isNegative()) throw new Error(`wallet ${r.id} is negative`);
   }
@@ -177,5 +195,6 @@ export async function assertSpotLocksMatchOrders(h: Harness, userId: string, ass
     [userId, a.id],
   );
   const expected = D(r?.s ?? 0).plus(wd?.s ?? 0);
-  if (!w.locked.eq(expected)) throw new Error(`locked ${w.locked.toFixed()} != reserved ${expected.toFixed()} for ${asset}`);
+  if (!w.locked.eq(expected))
+    throw new Error(`locked ${w.locked.toFixed()} != reserved ${expected.toFixed()} for ${asset}`);
 }

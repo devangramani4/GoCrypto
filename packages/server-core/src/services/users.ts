@@ -2,6 +2,7 @@ import type { Permission, UserDto, UserRole, UserStatus } from '@gocrypto/shared
 import type { Core } from '../core';
 import { type Executor, toMs, toMsStrict } from '../db/database';
 import { AppError } from '../errors';
+import { TtlCache } from '../cache/ttl-cache';
 
 export interface UserRow {
   id: string;
@@ -48,7 +49,8 @@ export const SYSTEM_EMAILS = {
 } as const;
 
 export class UserService {
-  private flagsCache = new Map<string, { flags: UserFlags; at: number }>();
+  /** Bounded: at most 100k users per process, 5s freshness (status changes also invalidate explicitly). */
+  private flagsCache = new TtlCache<string, UserFlags>(100_000, 5_000);
   private rolePermissions = new Map<string, Permission[]>();
   private systemIdSet = new Set<string>();
   systemIds: { marketMaker: string; feeCollector: string; insuranceFund: string } = {
@@ -60,7 +62,9 @@ export class UserService {
   constructor(private readonly core: Core) {}
 
   async load(): Promise<void> {
-    const sys = await this.core.db.query<{ id: string; email: string }>('SELECT id, email FROM users WHERE is_system = 1');
+    const sys = await this.core.db.query<{ id: string; email: string }>(
+      'SELECT id, email FROM users WHERE is_system = 1',
+    );
     this.systemIdSet = new Set(sys.map((r) => String(r.id)));
     const byEmail = new Map(sys.map((r) => [r.email, String(r.id)]));
     this.systemIds = {
@@ -98,12 +102,12 @@ export class UserService {
 
   /** Hot-path user flags (status, trading permissions, fee tier) cached for 5 seconds. */
   async flags(userId: string): Promise<UserFlags> {
-    const c = this.flagsCache.get(userId);
-    if (c && Date.now() - c.at < 5_000) return c.flags;
+    const cached = this.flagsCache.get(userId);
+    if (cached) return cached;
     const row = await this.core.db.one<UserRow>('SELECT * FROM users WHERE id = ? AND deleted_at IS NULL', [userId]);
     if (!row) throw new AppError('UNAUTHORIZED', 'User not found');
     const flags = this.toFlags(row);
-    this.flagsCache.set(userId, { flags, at: Date.now() });
+    this.flagsCache.set(userId, flags);
     return flags;
   }
 
@@ -214,11 +218,16 @@ export class UserService {
           id,
           JSON.stringify(DEFAULT_NOTIFICATION_PREFS),
         ]);
-        await exec.execute('UPDATE users SET referral_code = ? WHERE id = ?', [`GC${Number(id).toString(36).toUpperCase().padStart(6, '0')}`, id]);
+        await exec.execute('UPDATE users SET referral_code = ? WHERE id = ?', [
+          `GC${Number(id).toString(36).toUpperCase().padStart(6, '0')}`,
+          id,
+        ]);
         return id;
       } catch (e) {
-        if (isDuplicateKeyError(e, 'uq_users_email')) throw new AppError('EMAIL_TAKEN', 'An account with this email already exists');
-        if (isDuplicateKeyError(e, 'uq_users_phone')) throw new AppError('PHONE_TAKEN', 'This phone number is already registered');
+        if (isDuplicateKeyError(e, 'uq_users_email'))
+          throw new AppError('EMAIL_TAKEN', 'An account with this email already exists');
+        if (isDuplicateKeyError(e, 'uq_users_phone'))
+          throw new AppError('PHONE_TAKEN', 'This phone number is already registered');
         if (isDuplicateKeyError(e, 'uq_users_uid')) continue;
         throw e;
       }

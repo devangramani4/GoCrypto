@@ -4,6 +4,7 @@ import { D, type Decimal, type DecimalLike, toDb, toPlain } from '@gocrypto/trad
 import type { Core } from '../core';
 import { type Executor, type Tx, placeholders, toMsStrict } from '../db/database';
 import { AppError, isDuplicateKeyError } from '../errors';
+import { TtlCache } from '../cache/ttl-cache';
 
 export interface WalletKey {
   userId: string;
@@ -78,17 +79,41 @@ function toWalletRow(r: WalletDbRow): WalletRow {
  *    positions: code that changes positions must lock the wallet first.
  */
 export class WalletService {
+  /** Wallet rows are never deleted, so "exists" can be cached (bounded) and most calls cost no query. */
+  private readonly known = new TtlCache<string, true>(500_000, 6 * 3_600_000);
+
   constructor(private readonly core: Core) {}
 
-  /** Create missing wallet rows (autocommit, idempotent). Call before a transaction to avoid lock upgrades. */
+  /**
+   * Create missing wallet rows (autocommit, idempotent). Call before a transaction to avoid lock upgrades.
+   *
+   * Existing rows are detected with a plain (non-locking, READ COMMITTED) read and only genuinely missing
+   * rows are inserted, in key order. A blanket INSERT IGNORE would take shared locks on every existing row
+   * it touches — including hot system wallets (fee collector, insurance fund) that settlements hold FOR
+   * UPDATE — which deadlocked or stalled settlement under load.
+   */
   async ensureWallets(exec: Executor, keys: WalletKey[]): Promise<void> {
-    const uniq = new Map(keys.map((k) => [walletKey(k), k]));
-    if (uniq.size === 0) return;
-    const values = [...uniq.values()];
-    await exec.execute(
-      `INSERT IGNORE INTO wallets (user_id, asset_id, account_type) VALUES ${values.map(() => '(?, ?, ?)').join(', ')}`,
-      values.flatMap((k) => [k.userId, k.assetId, k.account]),
+    const pending = [...new Map(keys.map((k) => [walletKey(k), k])).values()].filter(
+      (k) => !this.known.get(walletKey(k)),
     );
+    if (pending.length === 0) return;
+    const rows = await exec.query<{ user_id: string; asset_id: number; account_type: AccountType }>(
+      `SELECT user_id, asset_id, account_type FROM wallets WHERE (user_id, account_type, asset_id) IN (${pending.map(() => '(?, ?, ?)').join(', ')})`,
+      pending.flatMap((k) => [k.userId, k.account, k.assetId]),
+    );
+    for (const r of rows)
+      this.known.set(
+        walletKey({ userId: String(r.user_id), assetId: Number(r.asset_id), account: r.account_type }),
+        true,
+      );
+    const missing = pending.filter((k) => !this.known.get(walletKey(k))).sort(compareKeys);
+    if (missing.length) {
+      await exec.execute(
+        `INSERT IGNORE INTO wallets (user_id, asset_id, account_type) VALUES ${missing.map(() => '(?, ?, ?)').join(', ')}`,
+        missing.flatMap((k) => [k.userId, k.assetId, k.account]),
+      );
+      for (const k of missing) this.known.set(walletKey(k), true);
+    }
   }
 
   /** Lock wallet rows FOR UPDATE in a deterministic order, creating any that are missing. */
@@ -112,7 +137,11 @@ export class WalletService {
     if (missing.length) {
       for (const k of missing) {
         try {
-          await tx.execute('INSERT INTO wallets (user_id, asset_id, account_type) VALUES (?, ?, ?)', [k.userId, k.assetId, k.account]);
+          await tx.execute('INSERT INTO wallets (user_id, asset_id, account_type) VALUES (?, ?, ?)', [
+            k.userId,
+            k.assetId,
+            k.account,
+          ]);
         } catch (e) {
           if (!isDuplicateKeyError(e)) throw e;
         }
@@ -172,16 +201,32 @@ export class WalletService {
         });
       }
     }
-    for (const w of touched.values()) {
-      const res = await tx.execute('UPDATE wallets SET available = ?, locked = ?, version = version + 1 WHERE id = ? AND version = ?', [
-        toDb(w.available),
-        toDb(w.locked),
-        w.id,
-        w.version,
-      ]);
+    // One round trip for all touched wallets (a settlement typically touches 4+). Rows are already locked
+    // FOR UPDATE; the per-row version check stays as a defensive assertion.
+    const rows = [...touched.values()];
+    if (rows.length === 1) {
+      const w = rows[0]!;
+      const res = await tx.execute(
+        'UPDATE wallets SET available = ?, locked = ?, version = version + 1 WHERE id = ? AND version = ?',
+        [toDb(w.available), toDb(w.locked), w.id, w.version],
+      );
       if (res.affectedRows !== 1) throw new Error(`wallet ${w.id} version conflict`);
-      w.version += 1;
+    } else if (rows.length > 1) {
+      const cases = rows.map(() => 'WHEN ? THEN ?').join(' ');
+      const res = await tx.execute(
+        `UPDATE wallets SET available = CASE id ${cases} END, locked = CASE id ${cases} END, version = version + 1
+          WHERE id IN (${rows.map(() => '?').join(', ')}) AND version = CASE id ${cases} END`,
+        [
+          ...rows.flatMap((w) => [w.id, toDb(w.available)]),
+          ...rows.flatMap((w) => [w.id, toDb(w.locked)]),
+          ...rows.map((w) => w.id),
+          ...rows.flatMap((w) => [w.id, w.version]),
+        ],
+      );
+      if (res.affectedRows !== rows.length)
+        throw new Error(`wallet version conflict (${res.affectedRows}/${rows.length} updated)`);
     }
+    for (const w of rows) w.version += 1;
     if (ledger.length) {
       await tx.execute(
         `INSERT INTO wallet_transactions
@@ -253,7 +298,15 @@ export class WalletService {
 
   async ledger(
     userId: string,
-    q: { cursor?: string; limit: number; asset?: string; account?: AccountType; type?: string; from?: number; to?: number },
+    q: {
+      cursor?: string;
+      limit: number;
+      asset?: string;
+      account?: AccountType;
+      type?: string;
+      from?: number;
+      to?: number;
+    },
   ): Promise<{ items: LedgerEntryDto[]; nextCursor: string | null }> {
     const where = ['user_id = ?'];
     const params: unknown[] = [userId];
@@ -307,7 +360,9 @@ export class WalletService {
   }
 
   /** Total balances per asset across all users (admin reporting). */
-  async totalsByAsset(): Promise<{ asset: string; account: AccountType; available: string; locked: string; users: number }[]> {
+  async totalsByAsset(): Promise<
+    { asset: string; account: AccountType; available: string; locked: string; users: number }[]
+  > {
     const rows = await this.core.db.query<Record<string, unknown>>(
       `SELECT w.asset_id, w.account_type, SUM(w.available) AS available, SUM(w.locked) AS locked, COUNT(*) AS users
          FROM wallets w JOIN users u ON u.id = w.user_id

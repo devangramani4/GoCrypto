@@ -31,7 +31,11 @@ export const metrics = {
     ['method', 'route', 'status'],
     [0.005, 0.01, 0.025, 0.05, 0.1, 0.25, 0.5, 1, 2.5, 5],
   ),
-  ordersTotal: counter('gocrypto_orders_total', 'Orders accepted/rejected by the risk engine', ['market_type', 'type', 'result']),
+  ordersTotal: counter('gocrypto_orders_total', 'Orders accepted/rejected by the risk engine', [
+    'market_type',
+    'type',
+    'result',
+  ]),
   tradesTotal: counter('gocrypto_trades_total', 'Trades executed by the matching engine', ['market_type']),
   engineCommandDuration: histogram(
     'gocrypto_engine_command_duration_seconds',
@@ -41,10 +45,17 @@ export const metrics = {
   ),
   engineQueueDepth: gauge('gocrypto_engine_queue_depth', 'Pending engine commands per market', ['symbol']),
   bookDepth: gauge('gocrypto_orderbook_orders', 'Resting orders in the in-memory book', ['symbol']),
-  settlementFailures: counter('gocrypto_settlement_failures_total', 'Settlement transactions that failed', ['market_type']),
+  settlementFailures: counter('gocrypto_settlement_failures_total', 'Settlement transactions that failed', [
+    'market_type',
+  ]),
   wsConnections: gauge('gocrypto_ws_connections', 'Open websocket connections'),
   wsMessages: counter('gocrypto_ws_messages_total', 'Websocket messages fanned out', ['scope']),
   wsSubscriptions: gauge('gocrypto_ws_subscriptions', 'Active websocket channel subscriptions'),
+  wsCoalesced: counter(
+    'gocrypto_ws_coalesced_total',
+    'Market updates folded into a newer pending one while the gateway was behind',
+    ['type'],
+  ),
   liquidationsTotal: counter('gocrypto_liquidations_total', 'Positions liquidated', ['margin_mode']),
   liquidationChecks: counter('gocrypto_liquidation_checks_total', 'Account risk evaluations performed'),
   fundingPayments: counter('gocrypto_funding_payments_total', 'Funding payments settled'),
@@ -61,7 +72,10 @@ export async function renderMetrics(): Promise<{ contentType: string; body: stri
 }
 
 /** Minimal /metrics + /health HTTP server for non-HTTP services (engine, workers, market-data). */
-export function startMetricsServer(port: number, health: () => Promise<Record<string, unknown>> = async () => ({})): http.Server | null {
+export function startMetricsServer(
+  port: number,
+  health: () => Promise<Record<string, unknown>> = async () => ({}),
+): http.Server | null {
   if (!port) return null;
   const token = loadConfig().METRICS_TOKEN;
   const server = http.createServer(async (req, res) => {

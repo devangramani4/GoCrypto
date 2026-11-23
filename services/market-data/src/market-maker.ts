@@ -1,7 +1,14 @@
-import type { OrderSide } from '@gocrypto/shared-types';
+import type { AccountType, OrderSide } from '@gocrypto/shared-types';
 import type { OrderAdmissionService } from '@gocrypto/risk-engine';
-import { type Core, type EngineGateway, type MarketInfo, SYSTEM_EMAILS } from '@gocrypto/server-core';
-import { D, type Decimal, ceilToStep, floorToStep } from '@gocrypto/trading-utils';
+import {
+  type BalanceChange,
+  type Core,
+  type EngineGateway,
+  type MarketInfo,
+  SYSTEM_EMAILS,
+  walletKey,
+} from '@gocrypto/server-core';
+import { D, type Decimal, ROUND_DOWN, ceilToStep, dmin, floorToStep } from '@gocrypto/trading-utils';
 import type { PriceEngine } from './price-engine';
 
 interface Quote {
@@ -11,12 +18,20 @@ interface Quote {
 }
 
 const LEVELS = 12;
+/** USD float kept in each per-book market-maker sub-account (refilled from the main account when below half). */
+const SPOT_FLOAT_USD = 3_000_000;
+const FUTURES_FLOAT_USD = 10_000_000;
 
 /**
  * Sandbox liquidity: a market maker quoting real orders on every spot/futures book (and the
  * nearest option strikes) around the index price, plus a separate "flow" account that sends small
  * taker orders so the books trade and prices track the index. Both are ordinary (system) users:
  * every order goes through the same risk checks, engine and settlement as client orders.
+ *
+ * Each spot/futures book is quoted from its own funded sub-account (mm+{symbol}@system.gocrypto), like
+ * independent liquidity providers: a single account quoting every book made one wallet row the lock hot
+ * spot for all markets. Sub-accounts are funded from the main market-maker account through ledger
+ * transfers, so balances still reconcile. Option quotes (low frequency) stay on the main account.
  */
 export class MarketMaker {
   private timers: NodeJS.Timeout[] = [];
@@ -24,6 +39,8 @@ export class MarketMaker {
   private flowId = '';
   private readonly busy = new Set<number>();
   private readonly lastRef = new Map<number, number>();
+  /** marketId -> sub-account user id quoting that book. */
+  private readonly bookAccounts = new Map<number, string>();
 
   constructor(
     private readonly core: Core,
@@ -40,16 +57,32 @@ export class MarketMaker {
       this.core.log.warn('market maker account missing; run the seed');
       return;
     }
-    // Start from a clean slate: cancel quotes left over from a previous run.
-    const markets = await this.core.db.query<{ market_id: number }>(
-      "SELECT DISTINCT market_id FROM orders WHERE user_id IN (?, ?) AND status IN ('NEW','OPEN','PARTIALLY_FILLED')",
-      [this.mmId, this.flowId || this.mmId],
-    );
-    for (const { market_id } of markets) {
-      await this.engine.submit({ kind: 'CANCEL_ALL', marketId: Number(market_id), userId: this.mmId, reason: 'SYSTEM' });
-      if (this.flowId) await this.engine.submit({ kind: 'CANCEL_ALL', marketId: Number(market_id), userId: this.flowId, reason: 'SYSTEM' });
-    }
     const books = this.core.markets.list().filter((m) => m.type !== 'OPTIONS');
+    for (const m of books) {
+      try {
+        this.bookAccounts.set(m.id, await this.setupBookAccount(m));
+      } catch (e) {
+        this.core.log.warn(
+          { err: e, symbol: m.symbol },
+          'market-maker sub-account setup failed; quoting from the main account',
+        );
+      }
+    }
+    // Start from a clean slate: cancel quotes left over from a previous run (main account, sub-accounts, flow).
+    const owners = [...new Set([this.mmId, ...this.bookAccounts.values(), ...(this.flowId ? [this.flowId] : [])])];
+    const leftovers = await this.core.db.query<{ market_id: number; user_id: string }>(
+      `SELECT DISTINCT market_id, user_id FROM orders WHERE user_id IN (${owners.map(() => '?').join(', ')}) AND status IN ('NEW','OPEN','PARTIALLY_FILLED')`,
+      owners,
+    );
+    for (const r of leftovers) {
+      await this.engine.submit({
+        kind: 'CANCEL_ALL',
+        marketId: Number(r.market_id),
+        userId: String(r.user_id),
+        reason: 'SYSTEM',
+      });
+    }
+    this.timers.push(setInterval(() => void this.refill(), 60_000));
     books.forEach((m, i) => {
       const t = setInterval(() => void this.requote(m.id), 2000 + (i % 5) * 150);
       this.timers.push(t);
@@ -64,6 +97,86 @@ export class MarketMaker {
 
   stop(): void {
     for (const t of this.timers) clearInterval(t);
+  }
+
+  private accountFor(m: MarketInfo): string {
+    return this.bookAccounts.get(m.id) ?? this.mmId;
+  }
+
+  private async setupBookAccount(m: MarketInfo): Promise<string> {
+    const email = `mm+${m.symbol.toLowerCase()}@system.gocrypto`;
+    const existing = await this.core.users.findByEmail(email);
+    const id = existing
+      ? String(existing.id)
+      : await this.core.users.createUser(this.core.db, {
+          email,
+          passwordHash: null,
+          isSystem: true,
+          displayName: `Market maker ${m.symbol}`,
+        });
+    await this.fund(m, id);
+    return id;
+  }
+
+  private async refill(): Promise<void> {
+    for (const m of this.core.markets.list().filter((x) => x.type !== 'OPTIONS')) {
+      const id = this.bookAccounts.get(m.id);
+      if (id)
+        await this.fund(m, id).catch((e: Error) =>
+          this.core.log.warn({ err: e.message, symbol: m.symbol }, 'mm refill failed'),
+        );
+    }
+  }
+
+  /** Top a book sub-account up to its USD float from the main account (paired ledger transfers). */
+  private async fund(m: MarketInfo, id: string): Promise<void> {
+    const targets: { assetId: number; account: AccountType; usd: number }[] =
+      m.type === 'SPOT'
+        ? [
+            { assetId: m.baseAssetId, account: 'SPOT', usd: SPOT_FLOAT_USD },
+            { assetId: m.quoteAssetId, account: 'SPOT', usd: SPOT_FLOAT_USD },
+          ]
+        : [{ assetId: m.quoteAssetId, account: 'FUTURES', usd: FUTURES_FLOAT_USD }];
+    const keys = targets.flatMap((t) => [
+      { userId: id, assetId: t.assetId, account: t.account },
+      { userId: this.mmId, assetId: t.assetId, account: t.account },
+    ]);
+    await this.core.wallet.ensureWallets(this.core.db, keys);
+    await this.core.db.transaction(async (tx) => {
+      const wallets = await this.core.wallet.lockWallets(tx, keys);
+      const changes: BalanceChange[] = [];
+      for (const t of targets) {
+        const asset = this.core.assets.byId(t.assetId);
+        const px = (asset && this.prices.indexOf(asset.symbol)) || 1;
+        const target = D(t.usd / px).toDecimalPlaces(asset?.decimals ?? 8, ROUND_DOWN);
+        const have = wallets.get(walletKey({ userId: id, assetId: t.assetId, account: t.account }))!.available;
+        if (have.gte(target.div(2))) continue;
+        const source = wallets.get(walletKey({ userId: this.mmId, assetId: t.assetId, account: t.account }))!.available;
+        const amount = dmin(target.minus(have), source).toDecimalPlaces(asset?.decimals ?? 8, ROUND_DOWN);
+        if (amount.lte(0)) continue;
+        changes.push(
+          {
+            userId: this.mmId,
+            assetId: t.assetId,
+            account: t.account,
+            available: amount.neg(),
+            type: 'TRANSFER_OUT',
+            refType: 'MM_FUNDING',
+            refId: id,
+          },
+          {
+            userId: id,
+            assetId: t.assetId,
+            account: t.account,
+            available: amount,
+            type: 'TRANSFER_IN',
+            refType: 'MM_FUNDING',
+            refId: this.mmId,
+          },
+        );
+      }
+      if (changes.length) await this.core.wallet.apply(tx, changes, wallets);
+    });
   }
 
   /** Reference price for a market from the index feed. */
@@ -85,9 +198,11 @@ export class MarketMaker {
     const grid = Math.max(tick, ref * 0.0003);
     const anchor = Math.round(ref / grid) * grid;
     const half = Math.max(tick, ref * 0.00025);
+    // Level sizes are defined in USD; convert to quote units (e.g. BTC on ETH/BTC), not 1 quote = 1 USD.
+    const quoteUsd = this.prices.indexOf(m.quote) ?? 1;
     for (let i = 0; i < LEVELS; i++) {
       const offset = half + i * Math.max(tick, ref * 0.00045) * (1 + i * 0.12);
-      const notional = (m.type === 'FUTURES' ? 6000 : 3000) * (1 + i * 0.6) * (0.6 + Math.random() * 0.8);
+      const notional = ((m.type === 'FUTURES' ? 6000 : 3000) * (1 + i * 0.6) * (0.6 + Math.random() * 0.8)) / quoteUsd;
       const bidPrice = floorToStep(D((anchor - offset).toFixed(10)), m.tickSize);
       const askPrice = ceilToStep(D((anchor + offset).toFixed(10)), m.tickSize);
       for (const [side, price] of [
@@ -115,9 +230,10 @@ export class MarketMaker {
   private async place(m: MarketInfo, side: OrderSide, price: Decimal, qty: Decimal): Promise<void> {
     const ctx = { source: 'SYSTEM' as const, system: true, awaitEngine: false };
     const base = { symbol: m.symbol, side, type: 'LIMIT' as const, price: price.toFixed(), quantity: qty.toFixed() };
-    if (m.type === 'SPOT') await this.admission.placeSpotOrder(this.mmId, base, ctx);
-    else if (m.type === 'FUTURES') await this.admission.placeFuturesOrder(this.mmId, base, ctx);
-    else await this.admission.placeOptionsOrder(this.mmId, base, ctx);
+    const owner = this.accountFor(m);
+    if (m.type === 'SPOT') await this.admission.placeSpotOrder(owner, base, ctx);
+    else if (m.type === 'FUTURES') await this.admission.placeFuturesOrder(owner, base, ctx);
+    else await this.admission.placeOptionsOrder(owner, base, ctx);
   }
 
   async requote(marketId: number): Promise<void> {
@@ -127,7 +243,7 @@ export class MarketMaker {
     const ref = this.reference(m);
     if (!ref) return;
     const last = this.lastRef.get(marketId);
-    const existing = await this.openQuotes(marketId, this.mmId);
+    const existing = await this.openQuotes(marketId, this.accountFor(m));
     if (last && Math.abs(ref / last - 1) < 0.0002 && existing.length >= LEVELS * 2 - 2) return;
     this.busy.add(marketId);
     try {
@@ -138,12 +254,18 @@ export class MarketMaker {
       for (const q of existing) {
         const k = `${q.side}:${q.price}`;
         const stale = !wanted.has(k) || keep.has(k);
-        if (stale) await this.engine.submit({ kind: 'CANCEL', orderId: q.id, marketId, reason: 'SYSTEM' }, { awaitResult: false });
+        if (stale)
+          await this.engine.submit(
+            { kind: 'CANCEL', orderId: q.id, marketId, reason: 'SYSTEM' },
+            { awaitResult: false },
+          );
         else keep.add(k);
       }
       for (const d of desired) {
         if (keep.has(`${d.side}:${d.price.toFixed()}`)) continue;
-        await this.place(m, d.side, d.price, d.qty).catch((e: Error) => this.core.log.debug({ err: e.message, symbol: m.symbol }, 'mm quote rejected'));
+        await this.place(m, d.side, d.price, d.qty).catch((e: Error) =>
+          this.core.log.debug({ err: e.message, symbol: m.symbol }, 'mm quote rejected'),
+        );
       }
     } catch (e) {
       this.core.log.warn({ err: e, symbol: m.symbol }, 'requote failed');
@@ -170,7 +292,11 @@ export class MarketMaker {
     const ctx = { source: 'SYSTEM' as const, system: true, awaitEngine: false };
     try {
       if (m.type === 'SPOT') {
-        await this.admission.placeSpotOrder(this.flowId, { symbol: m.symbol, side, type: 'MARKET', quantity: qty.toFixed() }, ctx);
+        await this.admission.placeSpotOrder(
+          this.flowId,
+          { symbol: m.symbol, side, type: 'MARKET', quantity: qty.toFixed() },
+          ctx,
+        );
       } else {
         const pos = await this.core.db.one<{ side: string | null; quantity: string }>(
           'SELECT side, quantity FROM futures_positions WHERE user_id = ? AND market_id = ?',
@@ -180,7 +306,13 @@ export class MarketMaker {
         const reduceSide: OrderSide | null = pos?.side === 'LONG' ? 'SELL' : pos?.side === 'SHORT' ? 'BUY' : null;
         await this.admission.placeFuturesOrder(
           this.flowId,
-          { symbol: m.symbol, side: tooBig && reduceSide ? reduceSide : side, type: 'MARKET', quantity: qty.toFixed(), reduceOnly: Boolean(tooBig && reduceSide) },
+          {
+            symbol: m.symbol,
+            side: tooBig && reduceSide ? reduceSide : side,
+            type: 'MARKET',
+            quantity: qty.toFixed(),
+            reduceOnly: Boolean(tooBig && reduceSide),
+          },
           ctx,
         );
       }
@@ -209,9 +341,16 @@ export class MarketMaker {
           const width = mark.mul('0.04').plus(tick);
           const bid = floorToStep(mark.minus(width), m.tickSize);
           const ask = ceilToStep(mark.plus(width), m.tickSize);
-          const fresh = existing.length === 2 && existing.some((q) => q.side === 'BUY' && D(q.price).eq(bid)) && existing.some((q) => q.side === 'SELL' && D(q.price).eq(ask));
+          const fresh =
+            existing.length === 2 &&
+            existing.some((q) => q.side === 'BUY' && D(q.price).eq(bid)) &&
+            existing.some((q) => q.side === 'SELL' && D(q.price).eq(ask));
           if (fresh) continue;
-          for (const q of existing) await this.engine.submit({ kind: 'CANCEL', orderId: q.id, marketId: m.id, reason: 'SYSTEM' }, { awaitResult: false });
+          for (const q of existing)
+            await this.engine.submit(
+              { kind: 'CANCEL', orderId: q.id, marketId: m.id, reason: 'SYSTEM' },
+              { awaitResult: false },
+            );
           const qty = floorToStep(D(1 + Math.random() * 9), m.stepSize);
           if (bid.gt(0)) await this.place(m, 'BUY', bid, qty).catch(() => undefined);
           await this.place(m, 'SELL', ask, qty).catch(() => undefined);
@@ -224,11 +363,15 @@ export class MarketMaker {
       const m = live[Math.floor(Math.random() * Math.min(live.length, 60))];
       if (m) {
         await this.admission
-          .placeOptionsOrder(this.flowId, { symbol: m.symbol, side: Math.random() < 0.6 ? 'BUY' : 'SELL', type: 'MARKET', quantity: '0.5' }, {
-            source: 'SYSTEM',
-            system: true,
-            awaitEngine: false,
-          })
+          .placeOptionsOrder(
+            this.flowId,
+            { symbol: m.symbol, side: Math.random() < 0.6 ? 'BUY' : 'SELL', type: 'MARKET', quantity: '0.5' },
+            {
+              source: 'SYSTEM',
+              system: true,
+              awaitEngine: false,
+            },
+          )
           .catch(() => undefined);
       }
     }

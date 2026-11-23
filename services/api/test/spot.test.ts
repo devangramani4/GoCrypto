@@ -1,7 +1,18 @@
+import { sweepFeeAccruals } from '@gocrypto/server-core';
 import { D } from '@gocrypto/trading-utils';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { TriggerMonitor } from '../../workers/src/triggers';
-import { type Harness, api, assertLedgerReconciles, assertSpotLocksMatchOrders, balance, createUser, flushBooks, setPrice, startHarness } from './harness';
+import {
+  type Harness,
+  api,
+  assertLedgerReconciles,
+  assertSpotLocksMatchOrders,
+  balance,
+  createUser,
+  flushBooks,
+  setPrice,
+  startHarness,
+} from './harness';
 
 let h: Harness;
 beforeAll(async () => {
@@ -22,9 +33,19 @@ describe('spot matching & settlement', () => {
     const m2 = await createUser(h, [['SPOT', 'BTC', '1']]);
     const t = await createUser(h, [['SPOT', 'USDT', '100000']]);
     // Two asks at the same price: m1 first.
-    expect((await order(m1.token, { symbol: 'BTCUSDT', side: 'SELL', type: 'LIMIT', price: '50000', quantity: '0.5' })).json().order.status).toBe('OPEN');
-    expect((await order(m2.token, { symbol: 'BTCUSDT', side: 'SELL', type: 'LIMIT', price: '50000', quantity: '0.5' })).json().order.status).toBe('OPEN');
-    const r = (await order(t.token, { symbol: 'BTCUSDT', side: 'BUY', type: 'LIMIT', price: '50100', quantity: '0.7' })).json();
+    expect(
+      (
+        await order(m1.token, { symbol: 'BTCUSDT', side: 'SELL', type: 'LIMIT', price: '50000', quantity: '0.5' })
+      ).json().order.status,
+    ).toBe('OPEN');
+    expect(
+      (
+        await order(m2.token, { symbol: 'BTCUSDT', side: 'SELL', type: 'LIMIT', price: '50000', quantity: '0.5' })
+      ).json().order.status,
+    ).toBe('OPEN');
+    const r = (
+      await order(t.token, { symbol: 'BTCUSDT', side: 'BUY', type: 'LIMIT', price: '50100', quantity: '0.7' })
+    ).json();
     expect(r.order.status).toBe('FILLED');
     expect(r.order.avgPrice).toBe('50000');
     expect(r.fills.map((f: { isMaker: boolean }) => f.isMaker)).toEqual([false, false]);
@@ -39,13 +60,17 @@ describe('spot matching & settlement', () => {
     expect((await balance(h, m2.id, 'USDT')).available.toFixed()).toBe('9990'); // 10000 - 0.1%
     expect((await balance(h, m2.id, 'BTC')).locked.toFixed()).toBe('0.3');
     await assertSpotLocksMatchOrders(h, m2.id, 'BTC');
+    // Fees are accrued by settlement and swept into the fee collector in aggregate.
+    expect(await sweepFeeAccruals(h.core)).toBeGreaterThan(0);
     const fees = await balance(h, h.core.users.systemIds.feeCollector, 'USDT');
     expect(fees.available.toFixed()).toBe('35'); // 25 + 10
   });
 
   it('rests GTC remainders, cancels and releases funds exactly', async () => {
     const u = await createUser(h, [['SPOT', 'USDT', '10000']]);
-    const o = (await order(u.token, { symbol: 'ETHUSDT', side: 'BUY', type: 'LIMIT', price: '2000', quantity: '2' })).json().order;
+    const o = (
+      await order(u.token, { symbol: 'ETHUSDT', side: 'BUY', type: 'LIMIT', price: '2000', quantity: '2' })
+    ).json().order;
     expect(o.status).toBe('OPEN');
     expect((await balance(h, u.id, 'USDT')).locked.toFixed()).toBe('4000');
     const c = await api(h, 'DELETE', `/api/v1/spot/orders/${o.id}`, { token: u.token });
@@ -57,12 +82,30 @@ describe('spot matching & settlement', () => {
 
   it('rejects insufficient balance and filter violations without side effects', async () => {
     const u = await createUser(h, [['SPOT', 'USDT', '100']]);
-    const insufficient = await order(u.token, { symbol: 'BTCUSDT', side: 'BUY', type: 'LIMIT', price: '40000', quantity: '0.01' });
+    const insufficient = await order(u.token, {
+      symbol: 'BTCUSDT',
+      side: 'BUY',
+      type: 'LIMIT',
+      price: '40000',
+      quantity: '0.01',
+    });
     expect(insufficient.statusCode).toBe(422);
     expect(insufficient.json().error.code).toBe('INSUFFICIENT_BALANCE');
-    const tick = await order(u.token, { symbol: 'BTCUSDT', side: 'BUY', type: 'LIMIT', price: '40000.001', quantity: '0.001' });
+    const tick = await order(u.token, {
+      symbol: 'BTCUSDT',
+      side: 'BUY',
+      type: 'LIMIT',
+      price: '40000.001',
+      quantity: '0.001',
+    });
     expect(tick.json().error.code).toBe('FILTER_VIOLATION');
-    const notional = await order(u.token, { symbol: 'BTCUSDT', side: 'BUY', type: 'LIMIT', price: '1000', quantity: '0.001' });
+    const notional = await order(u.token, {
+      symbol: 'BTCUSDT',
+      side: 'BUY',
+      type: 'LIMIT',
+      price: '1000',
+      quantity: '0.001',
+    });
     expect(notional.json().error.code).toBe('FILTER_VIOLATION');
     expect((await balance(h, u.id, 'USDT')).available.toFixed()).toBe('100');
     const orders = await h.core.db.one<{ c: number }>('SELECT COUNT(*) AS c FROM orders WHERE user_id = ?', [u.id]);
@@ -75,18 +118,47 @@ describe('spot matching & settlement', () => {
     await order(mm.token, { symbol: 'ETHUSDT', side: 'SELL', type: 'LIMIT', price: '3010', quantity: '1' });
     await flushBooks(h);
     const u = await createUser(h, [['SPOT', 'USDT', '10000']]);
-    const mkt = (await order(u.token, { symbol: 'ETHUSDT', side: 'BUY', type: 'MARKET', quoteQuantity: '4505' })).json();
+    const mkt = (
+      await order(u.token, { symbol: 'ETHUSDT', side: 'BUY', type: 'MARKET', quoteQuantity: '4505' })
+    ).json();
     expect(mkt.order.status).toBe('FILLED');
     expect(mkt.order.filledQuantity).toBe('1.5'); // 1 @ 3000 + 0.5 @ 3010
     expect((await balance(h, u.id, 'USDT')).available.toFixed()).toBe('5495');
     // Only 0.5 ETH remains at 3010: a 1.5 FOK cannot fully fill and must not touch the book.
-    const fok = (await order(u.token, { symbol: 'ETHUSDT', side: 'BUY', type: 'LIMIT', price: '3010', quantity: '1.5', timeInForce: 'FOK' })).json();
+    const fok = (
+      await order(u.token, {
+        symbol: 'ETHUSDT',
+        side: 'BUY',
+        type: 'LIMIT',
+        price: '3010',
+        quantity: '1.5',
+        timeInForce: 'FOK',
+      })
+    ).json();
     expect(fok.order.status).toBe('EXPIRED');
     expect(fok.order.filledQuantity).toBe('0');
-    const ioc = (await order(u.token, { symbol: 'ETHUSDT', side: 'BUY', type: 'LIMIT', price: '3010', quantity: '1', timeInForce: 'IOC' })).json();
+    const ioc = (
+      await order(u.token, {
+        symbol: 'ETHUSDT',
+        side: 'BUY',
+        type: 'LIMIT',
+        price: '3010',
+        quantity: '1',
+        timeInForce: 'IOC',
+      })
+    ).json();
     expect(ioc.order.status).toBe('EXPIRED');
     expect(ioc.order.filledQuantity).toBe('0.5');
-    const post = (await order(u.token, { symbol: 'ETHUSDT', side: 'BUY', type: 'LIMIT', price: '3010', quantity: '0.1', postOnly: true })).json();
+    const post = (
+      await order(u.token, {
+        symbol: 'ETHUSDT',
+        side: 'BUY',
+        type: 'LIMIT',
+        price: '3010',
+        quantity: '0.1',
+        postOnly: true,
+      })
+    ).json();
     expect(post.order.status).toBe('OPEN'); // book is empty on the ask side now, so it rests
     await assertSpotLocksMatchOrders(h, u.id, 'USDT');
   });
@@ -95,12 +167,21 @@ describe('spot matching & settlement', () => {
     const a = await createUser(h, [['SPOT', 'USDT', '100000']]);
     const b = await createUser(h, [['SPOT', 'USDT', '100000']]);
     const s = await createUser(h, [['SPOT', 'BTC', '1']]);
-    const oa = (await order(a.token, { symbol: 'BTCUSDT', side: 'BUY', type: 'LIMIT', price: '45000', quantity: '0.2' })).json().order;
-    const ob = (await order(b.token, { symbol: 'BTCUSDT', side: 'BUY', type: 'LIMIT', price: '45000', quantity: '0.2' })).json().order;
-    const amended = await api(h, 'PATCH', `/api/v1/spot/orders/${oa.id}`, { token: a.token, body: { quantity: '0.1' } });
+    const oa = (
+      await order(a.token, { symbol: 'BTCUSDT', side: 'BUY', type: 'LIMIT', price: '45000', quantity: '0.2' })
+    ).json().order;
+    const ob = (
+      await order(b.token, { symbol: 'BTCUSDT', side: 'BUY', type: 'LIMIT', price: '45000', quantity: '0.2' })
+    ).json().order;
+    const amended = await api(h, 'PATCH', `/api/v1/spot/orders/${oa.id}`, {
+      token: a.token,
+      body: { quantity: '0.1' },
+    });
     expect(amended.json().quantity).toBe('0.1');
     expect((await balance(h, a.id, 'USDT')).locked.toFixed()).toBe('4500');
-    const sell = (await order(s.token, { symbol: 'BTCUSDT', side: 'SELL', type: 'LIMIT', price: '45000', quantity: '0.1' })).json();
+    const sell = (
+      await order(s.token, { symbol: 'BTCUSDT', side: 'SELL', type: 'LIMIT', price: '45000', quantity: '0.1' })
+    ).json();
     expect(sell.fills[0].orderId).toBe(sell.order.id);
     const filledA = (await api(h, 'GET', `/api/v1/orders/${oa.id}`, { token: a.token })).json();
     expect(filledA.order.status).toBe('FILLED'); // a kept time priority
@@ -140,7 +221,15 @@ describe('spot matching & settlement', () => {
     await flushBooks(h);
     const u = await createUser(h, [['SPOT', 'BTC', '0.5']]);
     await h.core.redis.main.set(`gctest:ticker:BTCUSDT`, JSON.stringify({ symbol: 'BTCUSDT', lastPrice: '45500' }));
-    const stop = (await order(u.token, { symbol: 'BTCUSDT', side: 'SELL', type: 'STOP_MARKET', stopPrice: '45000', quantity: '0.5' })).json().order;
+    const stop = (
+      await order(u.token, {
+        symbol: 'BTCUSDT',
+        side: 'SELL',
+        type: 'STOP_MARKET',
+        stopPrice: '45000',
+        quantity: '0.5',
+      })
+    ).json().order;
     expect(stop.status).toBe('NEW');
     expect(stop.triggerState).toBe('PENDING');
     expect((await balance(h, u.id, 'BTC')).locked.toFixed()).toBe('0.5');
@@ -155,5 +244,31 @@ describe('spot matching & settlement', () => {
     expect(done.order.triggerState).toBe('TRIGGERED');
     expect(done.history.map((x: { event: string }) => x.event)).toContain('TRIGGERED');
     expect((await balance(h, u.id, 'USDT')).available.toFixed()).toBe('21978'); // 0.5 * 44000 - 0.1%
+  });
+});
+
+describe('portfolio', () => {
+  it('values balances and reports inflows, open orders and positions', async () => {
+    const u = await createUser(h, [
+      ['SPOT', 'USDT', '10000'],
+      ['SPOT', 'BTC', '0.1'],
+      ['FUTURES', 'USDT', '2000'],
+    ]);
+    // Resting bid far below the market: funds move to `locked` but stay part of the portfolio value.
+    expect(
+      (await order(u.token, { symbol: 'BTCUSDT', side: 'BUY', type: 'LIMIT', price: '30000', quantity: '0.01' })).json()
+        .order.status,
+    ).toBe('OPEN');
+    const s = (await api(h, 'GET', '/api/v1/portfolio/summary', { token: u.token })).json();
+    // 10,000 USDT + 0.1 BTC @ 50,000 + 2,000 USDT futures margin balance.
+    expect(s.totalValue).toBe('17000');
+    expect(s.spotValue).toBe('15000');
+    expect(s.futuresValue).toBe('2000');
+    expect(s.totalDeposits).toBe('17000'); // sandbox credits count as inflow
+    expect(s.totalWithdrawals).toBe('0');
+    expect(s.realizedPnl).toBe('0');
+    expect(s.roi).toBe('0');
+    expect(s.openOrders).toBe(1);
+    expect(s.openPositions).toBe(0);
   });
 });

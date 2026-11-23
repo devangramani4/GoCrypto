@@ -1,4 +1,4 @@
-import type { OrderDto, OrderStatus } from '@gocrypto/shared-types';
+import type { OrderDto, OrderStatus, PublicTradeDto } from '@gocrypto/shared-types';
 import { marketChannel, userChannel } from '@gocrypto/shared-types';
 import {
   AppError,
@@ -17,15 +17,23 @@ import {
 import { D, type Decimal, ONE, ZERO, dmin, floorToStep, q18, toDb, validateLimitOrder } from '@gocrypto/trading-utils';
 import { OrderBook, type Side, type TakerOrder } from '../engine/order-book';
 import { BalanceSim } from '../settlement/balance-sim';
-import { AlreadyProcessedError, type OrderState, Settlement, type SettleOutput, orderState } from '../settlement/settlement';
+import {
+  AlreadyProcessedError,
+  type OrderState,
+  Settlement,
+  type SettleOutput,
+  orderState,
+} from '../settlement/settlement';
 
 export interface RunnerOptions {
-  /** Depth snapshot publish interval (coalesced, only for changed books). */
+  /** Market-data publish interval: depth snapshots (changed books only) and coalesced public trades. */
   depthIntervalMs?: number;
   depthLevels?: number;
   /** Re-submit accepted-but-unprocessed orders older than this (ms). */
   orphanAgeMs?: number;
   sweepIntervalMs?: number;
+  /** Markets served by this instance (engine sharding); all markets when omitted. */
+  owns?: (marketId: number) => boolean;
 }
 
 const OPEN: OrderStatus[] = ['NEW', 'OPEN', 'PARTIALLY_FILLED'];
@@ -62,6 +70,8 @@ export class EngineRunner {
   private readonly chains = new Map<number, Promise<unknown>>();
   private readonly pending = new Map<number, number>();
   private readonly dirty = new Set<number>();
+  /** Public trades awaiting the next publish tick, oldest first (one WebSocket message per market per tick). */
+  private readonly pendingTrades = new Map<number, { symbol: string; trades: PublicTradeDto[] }>();
   private depthTimer: NodeJS.Timeout | null = null;
   private sweepTimer: NodeJS.Timeout | null = null;
   readonly settlement: Settlement;
@@ -73,14 +83,24 @@ export class EngineRunner {
     this.settlement = new Settlement(core);
   }
 
+  /** Whether this instance is the single writer for a market's book. */
+  owns(marketId: number): boolean {
+    return this.opts.owns ? this.opts.owns(marketId) : true;
+  }
+
   async start(): Promise<void> {
     for (const m of this.core.markets.list()) {
-      if (m.status === 'TRADING') await this.getBook(m);
+      if (m.status === 'TRADING' && this.owns(m.id)) await this.getBook(m);
     }
-    this.depthTimer = setInterval(() => void this.publishDepth(), this.opts.depthIntervalMs ?? 100);
+    this.depthTimer = setInterval(
+      () => void this.publishDepth(),
+      this.opts.depthIntervalMs ?? this.core.config.ENGINE_PUBLISH_INTERVAL_MS,
+    );
     this.depthTimer.unref();
     this.sweepTimer = setInterval(() => {
-      this.sweepOrphans(this.opts.orphanAgeMs ?? 5000).catch((e) => this.core.log.error({ err: e }, 'orphan sweep failed'));
+      this.sweepOrphans(this.opts.orphanAgeMs ?? 5000).catch((e) =>
+        this.core.log.error({ err: e }, 'orphan sweep failed'),
+      );
     }, this.opts.sweepIntervalMs ?? 15_000);
     this.sweepTimer.unref();
     await this.sweepOrphans(0);
@@ -170,6 +190,11 @@ export class EngineRunner {
 
   submit(cmd: EngineCommand): Promise<EngineResult> {
     const mid = cmd.marketId;
+    if (!this.owns(mid)) {
+      // Misrouted (producer configured with a different shard layout): never touch another shard's book.
+      this.core.log.error({ cmd }, 'engine command for a market owned by another shard');
+      return Promise.resolve(fail('SERVICE_UNAVAILABLE', 'Market is served by another engine shard'));
+    }
     this.pending.set(mid, (this.pending.get(mid) ?? 0) + 1);
     const prev = this.chains.get(mid) ?? Promise.resolve();
     const run = prev.then(() => this.process(cmd));
@@ -245,7 +270,8 @@ export class EngineRunner {
         `SELECT side, quantity FROM ${table} WHERE user_id = ? AND market_id = ?`,
         [row.user_id, market.id],
       );
-      const closes = pos?.side && D(pos.quantity).gt(0) && (pos.side === 'LONG' ? row.side === 'SELL' : row.side === 'BUY');
+      const closes =
+        pos?.side && D(pos.quantity).gt(0) && (pos.side === 'LONG' ? row.side === 'SELL' : row.side === 'BUY');
       const closable = closes ? D(pos!.quantity) : ZERO;
       qty = floorToStep(row.close_position || !qty ? closable : dmin(qty, closable), market.stepSize);
       if (qty.lte(0)) {
@@ -276,19 +302,32 @@ export class EngineRunner {
       const idx = await this.core.options.indexFor(market.option.underlying);
       if (idx) {
         indexPrice = D(idx);
-        optionMark = this.core.options.markFor(market, idx, await this.core.options.baseIv(market.option.underlying)).mark;
+        optionMark = this.core.options.markFor(
+          market,
+          idx,
+          await this.core.options.baseIv(market.option.underlying),
+        ).mark;
       }
     }
 
     const result = book.match(taker);
+    let out: SettleOutput;
     try {
-      const out = await this.settlement.settleMatch({ market, takerId: String(row.id), takerQty: qty, result, indexPrice, optionMark });
-      await this.afterSettle(market, out);
-      const t = out.orders.find((o) => o.row.id === String(row.id));
-      return { ok: true, orderId, status: t?.status ?? row.status };
+      out = await this.settlement.settleMatch({
+        market,
+        takerId: String(row.id),
+        takerQty: qty,
+        result,
+        indexPrice,
+        optionMark,
+      });
     } catch (e) {
       return this.recover(market, String(row.id), e);
     }
+    // Committed: from here on the order has executed, whatever happens while publishing.
+    await this.afterSettleSafe(market, out);
+    const t = out.orders.find((o) => o.row.id === String(row.id));
+    return { ok: true, orderId, status: t?.status ?? row.status };
   }
 
   private protectionPrice(book: OrderBook, market: MarketInfo, side: Side): Decimal | undefined {
@@ -321,19 +360,51 @@ export class EngineRunner {
 
   // ───────────────────────── after settlement ─────────────────────────
 
+  /**
+   * Post-commit work for a settled command. The settlement is already durable, so a failure here (Redis
+   * hiccup, a follow-up OCO / reduce-only cancel) is logged and the book is re-synchronised from the
+   * database instead of reporting the executed order as failed.
+   */
+  private async afterSettleSafe(market: MarketInfo, out: SettleOutput): Promise<void> {
+    try {
+      await this.afterSettle(market, out);
+    } catch (e) {
+      this.core.log.error(
+        { err: e, market: market.symbol },
+        'post-settlement processing failed; reloading book from database',
+      );
+      await this.loadBook(market).catch((err: unknown) =>
+        this.core.log.error({ err, market: market.symbol }, 'book reload failed'),
+      );
+    }
+  }
+
   private async afterSettle(market: MarketInfo, out: SettleOutput): Promise<void> {
     this.dirty.add(market.id);
     const sys = (id: string) => this.core.users.isSystemUserCached(id);
     if (out.records.length) {
       metrics.tradesTotal.inc({ market_type: market.type }, out.records.length);
       const { trades, stream } = Settlement.publicTrades(market, out.records);
-      this.core.bus.ws(marketChannel(market.symbol, 'trades'), 'trades', trades);
+      // Public trades are coalesced per market and go out with the next publish tick, so a busy market
+      // costs each subscriber at most one trades frame per tick instead of one per match.
+      const pending = this.pendingTrades.get(market.id);
+      if (pending) pending.trades.push(...trades);
+      else this.pendingTrades.set(market.id, { symbol: market.symbol, trades: [...trades] });
+      // Recent-trades list + durable trade stream in one round trip; commands on one connection keep
+      // their order, so the market's command chain does not wait for it.
       const pipe = this.core.redis.pub.pipeline();
       const listKey = PriceService.tradesKey(market.symbol);
-      pipe.lpush(listKey, ...trades.map((t) => JSON.stringify(t)).reverse());
+      // LPUSH inserts left to right: pushing oldest→newest leaves the newest trade at the head.
+      pipe.lpush(listKey, ...trades.map((t) => JSON.stringify(t)));
       pipe.ltrim(listKey, 0, 199);
-      await pipe.exec();
-      for (const s of stream) await this.core.bus.appendStream(STREAMS.trades, s);
+      for (const s of stream) this.core.bus.appendStreamTo(pipe, STREAMS.trades, s);
+      pipe
+        .exec()
+        .then((res) => {
+          const err = res?.find(([e]) => e)?.[0];
+          if (err) this.core.log.warn({ err, market: market.symbol }, 'trade publish failed');
+        })
+        .catch((err: unknown) => this.core.log.warn({ err, market: market.symbol }, 'trade publish failed'));
       for (const { user, dto } of Settlement.fillDtos(this.core, market, out.records)) {
         if (!sys(user)) this.core.bus.ws(userChannel(user, 'trades'), 'fill', dto);
       }
@@ -344,14 +415,22 @@ export class EngineRunner {
     const ocoGroups = new Set(
       out.orders.filter((o) => o.row.oco_group_id && o.filledQty.gt(0)).map((o) => String(o.row.oco_group_id)),
     );
-    for (const g of ocoGroups) await this.cancelOcoSiblings(g, out.orders.map((o) => o.row.id), market);
+    for (const g of ocoGroups)
+      await this.cancelOcoSiblings(
+        g,
+        out.orders.map((o) => o.row.id),
+        market,
+      );
 
     for (const p of out.positionsChanged) {
       this.core.bus.emit('position.changed', p);
       if (!sys(p.userId)) void this.publishPosition(p.userId, market);
     }
     if (market.type === 'FUTURES' && out.positionsChanged.length) {
-      await this.sweepReduceOnly(market, out.positionsChanged.map((p) => p.userId));
+      await this.sweepReduceOnly(
+        market,
+        out.positionsChanged.map((p) => p.userId),
+      );
     }
   }
 
@@ -365,7 +444,12 @@ export class EngineRunner {
         void this.core.notifications
           .notify({
             userId,
-            type: o.row.trigger_state === 'TRIGGERED' ? (o.row.type.startsWith('TAKE_PROFIT') ? 'TAKE_PROFIT_TRIGGERED' : 'STOP_TRIGGERED') : 'ORDER_FILLED',
+            type:
+              o.row.trigger_state === 'TRIGGERED'
+                ? o.row.type.startsWith('TAKE_PROFIT')
+                  ? 'TAKE_PROFIT_TRIGGERED'
+                  : 'STOP_TRIGGERED'
+                : 'ORDER_FILLED',
             title: `${dto.side === 'BUY' ? 'Buy' : 'Sell'} order filled`,
             body: `${dto.symbol}: ${dto.filledQuantity} filled at avg ${dto.avgPrice ?? '-'}`,
             data: { orderId: dto.id, symbol: dto.symbol },
@@ -380,11 +464,19 @@ export class EngineRunner {
       if (market.type === 'FUTURES') {
         const positions = await this.core.futures.positionDtos(userId);
         const p = positions.find((x) => x.symbol === market.symbol) ?? null;
-        this.core.bus.ws(userChannel(userId, 'positions'), 'position', { marketType: 'FUTURES', symbol: market.symbol, futures: p });
+        this.core.bus.ws(userChannel(userId, 'positions'), 'position', {
+          marketType: 'FUTURES',
+          symbol: market.symbol,
+          futures: p,
+        });
       } else if (market.type === 'OPTIONS') {
         const positions = await this.core.options.positionDtos(userId);
         const p = positions.find((x) => x.symbol === market.symbol) ?? null;
-        this.core.bus.ws(userChannel(userId, 'positions'), 'position', { marketType: 'OPTIONS', symbol: market.symbol, options: p });
+        this.core.bus.ws(userChannel(userId, 'positions'), 'position', {
+          marketType: 'OPTIONS',
+          symbol: market.symbol,
+          options: p,
+        });
       }
     } catch (e) {
       this.core.log.warn({ err: e, userId }, 'position publish failed');
@@ -452,7 +544,13 @@ export class EngineRunner {
       await tx.execute('UPDATE orders SET locked_amount = locked_amount + ? WHERE id = ?', [toDb(moved), row.id]);
       await this.core.orders.addHistory(
         tx,
-        out.map((o) => ({ orderId: o.row.id, userId: String(o.row.user_id), event: 'CANCELLED', status: 'CANCELLED' as const, details: { reason: 'OCO' } })),
+        out.map((o) => ({
+          orderId: o.row.id,
+          userId: String(o.row.user_id),
+          event: 'CANCELLED',
+          status: 'CANCELLED' as const,
+          details: { reason: 'OCO' },
+        })),
       );
       return out;
     });
@@ -473,7 +571,8 @@ export class EngineRunner {
     const changed = await this.settlement.cancelOrders(ids, 'OCO');
     this.publishOrders(changed);
     for (const r of rows) {
-      if (r.trigger_state === 'PENDING') this.core.bus.emit('order.trigger', { action: 'removed', orderId: String(r.id), marketId: market.id });
+      if (r.trigger_state === 'PENDING')
+        this.core.bus.emit('order.trigger', { action: 'removed', orderId: String(r.id), marketId: market.id });
     }
     await this.core.db.execute("UPDATE order_lists SET status = 'ALL_DONE' WHERE id = ?", [groupId]);
   }
@@ -503,7 +602,8 @@ export class EngineRunner {
       const changed = await this.settlement.cancelOrders(ids, reason);
       this.publishOrders(changed);
       for (const c of changed) {
-        if (c.row.trigger_state === 'PENDING') this.core.bus.emit('order.trigger', { action: 'removed', orderId: c.row.id, marketId: market.id });
+        if (c.row.trigger_state === 'PENDING')
+          this.core.bus.emit('order.trigger', { action: 'removed', orderId: c.row.id, marketId: market.id });
       }
       this.dirty.add(market.id);
       const self = changed.find((c) => c.row.id === orderId);
@@ -531,7 +631,8 @@ export class EngineRunner {
     }
     this.publishOrders(changed);
     for (const r of rows) {
-      if (r.trigger_state === 'PENDING') this.core.bus.emit('order.trigger', { action: 'removed', orderId: String(r.id), marketId });
+      if (r.trigger_state === 'PENDING')
+        this.core.bus.emit('order.trigger', { action: 'removed', orderId: String(r.id), marketId });
     }
     this.dirty.add(marketId);
     return { ok: true, cancelled: changed.map((c) => c.row.id) };
@@ -555,7 +656,8 @@ export class EngineRunner {
     const newQty = cmd.quantity ? D(cmd.quantity) : D(row.quantity!);
     const filled = D(row.filled_quantity);
     const newRemaining = newQty.minus(filled);
-    if (newRemaining.lte(0)) return fail('ORDER_NOT_AMENDABLE', 'New quantity must exceed the filled quantity', cmd.orderId);
+    if (newRemaining.lte(0))
+      return fail('ORDER_NOT_AMENDABLE', 'New quantity must exceed the filled quantity', cmd.orderId);
     const violation = validateLimitOrder(newPrice, newRemaining, market);
     if (violation) return fail('FILTER_VIOLATION', violation, cmd.orderId);
     if (row.post_only && book.wouldCross(row.side, newPrice) && !newPrice.eq(oldPrice)) {
@@ -565,7 +667,10 @@ export class EngineRunner {
     const keepsPriority = newPrice.eq(oldPrice) && newRemaining.lte(resting.remaining);
     // Recompute the reservation for the new remaining quantity / price.
     const flags = await this.core.users.flags(cmd.userId);
-    const rates = await this.core.fees.ratesFor({ id: cmd.userId, vipTier: flags.vipTier, isSystem: flags.isSystem }, market);
+    const rates = await this.core.fees.ratesFor(
+      { id: cmd.userId, vipTier: flags.vipTier, isSystem: flags.isSystem },
+      market,
+    );
     let required: Decimal;
     if (market.type === 'SPOT') required = spotReserve(row.side, newRemaining, newPrice);
     else if (market.type === 'FUTURES') {
@@ -580,10 +685,23 @@ export class EngineRunner {
       });
     } else {
       const idx = (await this.core.options.indexFor(market.option!.underlying)) ?? Number(market.option!.strike);
-      const { mark } = this.core.options.markFor(market, idx, await this.core.options.baseIv(market.option!.underlying));
-      required = optionsReserve({ market, side: row.side, qty: newRemaining, price: newPrice, indexPrice: idx, markPrice: mark, feeRate: rates.taker });
+      const { mark } = this.core.options.markFor(
+        market,
+        idx,
+        await this.core.options.baseIv(market.option!.underlying),
+      );
+      required = optionsReserve({
+        market,
+        side: row.side,
+        qty: newRemaining,
+        price: newPrice,
+        indexPrice: idx,
+        markPrice: mark,
+        feeRate: rates.taker,
+      });
     }
 
+    let out: SettleOutput;
     try {
       const updated = await this.core.db.transaction(async (tx) => {
         const locked = await this.core.orders.lock(tx, String(row.id));
@@ -594,7 +712,11 @@ export class EngineRunner {
         const diff = q18(required).minus(current);
         const sim = new BalanceSim(new Map());
         const account = market.type;
-        const meta = { type: (diff.gt(0) ? 'ORDER_LOCK' : 'ORDER_UNLOCK') as 'ORDER_LOCK' | 'ORDER_UNLOCK', refType: 'ORDER', refId: String(row.id) };
+        const meta = {
+          type: (diff.gt(0) ? 'ORDER_LOCK' : 'ORDER_UNLOCK') as 'ORDER_LOCK' | 'ORDER_UNLOCK',
+          refType: 'ORDER',
+          refId: String(row.id),
+        };
         if (diff.gt(0)) sim.reserve(cmd.userId, Number(locked.lock_asset_id), account, diff, meta);
         else if (diff.lt(0)) sim.release(cmd.userId, Number(locked.lock_asset_id), account, diff.neg(), meta);
         if (sim.changes.length) await this.core.wallet.apply(tx, sim.changes);
@@ -610,7 +732,10 @@ export class EngineRunner {
             userId: cmd.userId,
             event: 'AMENDED',
             status: locked.status,
-            details: { from: { price: locked.price, quantity: locked.quantity }, to: { price: newPrice.toFixed(), quantity: newQty.toFixed() } },
+            details: {
+              from: { price: locked.price, quantity: locked.quantity },
+              to: { price: newPrice.toFixed(), quantity: newQty.toFixed() },
+            },
           },
         ]);
         return (await this.core.orders.find(String(row.id), tx))!;
@@ -636,39 +761,51 @@ export class EngineRunner {
         stp: 'EXPIRE_MAKER',
         reduceOnly: Boolean(row.reduce_only),
       });
-      const out = await this.settlement.settleMatch({
+      out = await this.settlement.settleMatch({
         market,
         takerId: String(row.id),
         takerQty: newQty,
         result,
         takerOpen: true,
       });
-      await this.afterSettle(market, out);
-      return { ok: true, orderId: cmd.orderId, status: out.orders.find((o) => o.row.id === String(row.id))?.status };
     } catch (e) {
       await this.loadBook(market);
       if (e instanceof AppError) return fail(e.code, e.message, cmd.orderId);
       throw e;
     }
+    await this.afterSettleSafe(market, out);
+    return { ok: true, orderId: cmd.orderId, status: out.orders.find((o) => o.row.id === String(row.id))?.status };
   }
 
   // ───────────────────────── background ─────────────────────────
 
   /** Re-submit orders that were accepted (funds locked) but never reached the engine. */
   async sweepOrphans(minAgeMs: number): Promise<number> {
+    const owned = this.opts.owns
+      ? this.core.markets
+          .list()
+          .filter((m) => this.owns(m.id))
+          .map((m) => m.id)
+      : null;
+    if (owned && owned.length === 0) return 0;
     const rows = await this.core.db.query<{ id: string; market_id: number }>(
       `SELECT id, market_id FROM orders
         WHERE status = 'NEW' AND trigger_state IN ('NONE','TRIGGERED') AND created_at < (NOW(3) - INTERVAL ? MICROSECOND)
+          ${owned ? `AND market_id IN (${owned.map(() => '?').join(', ')})` : ''}
         ORDER BY id LIMIT 1000`,
-      [minAgeMs * 1000],
+      [minAgeMs * 1000, ...(owned ?? [])],
     );
     for (const r of rows) void this.submit({ kind: 'NEW', orderId: String(r.id), marketId: Number(r.market_id) });
     if (rows.length) this.core.log.info({ count: rows.length }, 're-submitted unprocessed orders');
     return rows.length;
   }
 
-  /** Coalesced depth publication: only books that changed since the last tick. */
+  /** One publish tick: coalesced public trades, then depth for the books that changed since the last tick. */
   publishDepth(): Promise<void> {
+    for (const { symbol, trades } of this.pendingTrades.values()) {
+      this.core.bus.ws(marketChannel(symbol, 'trades'), 'trades', trades);
+    }
+    this.pendingTrades.clear();
     if (!this.dirty.size) return Promise.resolve();
     const levels = this.opts.depthLevels ?? 100;
     const pipe = this.core.redis.pub.pipeline();
@@ -677,7 +814,13 @@ export class EngineRunner {
       const market = this.core.markets.byId(id);
       if (!book || !market) continue;
       const depth = book.depth(levels);
-      const snapshot = { symbol: market.symbol, bids: depth.bids, asks: depth.asks, seq: book.tradeSeq * 1_000_000 + book.orderSeq, ts: Date.now() };
+      const snapshot = {
+        symbol: market.symbol,
+        bids: depth.bids,
+        asks: depth.asks,
+        seq: book.tradeSeq * 1_000_000 + book.orderSeq,
+        ts: Date.now(),
+      };
       pipe.set(PriceService.bookKey(market.symbol), JSON.stringify(snapshot));
       this.core.bus.ws(marketChannel(market.symbol, 'orderbook'), 'orderbook', snapshot);
       metrics.bookDepth.set({ symbol: market.symbol }, book.size);

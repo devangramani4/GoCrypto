@@ -5,29 +5,48 @@ import type { FastifyInstance } from 'fastify';
 import type { ZodTypeProvider } from 'fastify-type-provider-zod';
 import { z } from 'zod';
 import type { ApiDeps } from '../deps';
+import { publicCaches, sendCachedJson } from '../util/public-cache';
 import { authenticated, requireUser } from '../plugins/auth';
 
 export async function assetRoutes(app: FastifyInstance, { core }: ApiDeps): Promise<void> {
   const r = app.withTypeProvider<ZodTypeProvider>();
-  r.get('/', { config: { apiKey: 'READ' } }, async (_req, reply) => {
-    void reply.header('cache-control', 'public, max-age=5');
-    const prices = await core.prices.usdPrices();
-    return core.assets.list().filter((a) => a.isActive).map((a) => core.assets.toDto(a, prices.get(a.symbol) ?? null));
-  });
-  r.get('/:symbol', { schema: { params: z.object({ symbol: z.string().regex(/^[A-Z0-9]{2,16}$/) }) }, config: { apiKey: 'READ' } }, async (req) => {
-    const a = core.assets.require(req.params.symbol);
-    return core.assets.toDto(a, await core.prices.usdPrice(a.symbol));
-  });
+  r.get('/', { config: { apiKey: 'READ' } }, async (_req, reply) =>
+    sendCachedJson(reply, publicCaches.assets, 'all', 'public, max-age=5', async () => {
+      const prices = await core.prices.usdPrices();
+      return core.assets
+        .list()
+        .filter((a) => a.isActive)
+        .map((a) => core.assets.toDto(a, prices.get(a.symbol) ?? null));
+    }),
+  );
+  r.get(
+    '/:symbol',
+    { schema: { params: z.object({ symbol: z.string().regex(/^[A-Z0-9]{2,16}$/) }) }, config: { apiKey: 'READ' } },
+    async (req) => {
+      const a = core.assets.require(req.params.symbol);
+      return core.assets.toDto(a, await core.prices.usdPrice(a.symbol));
+    },
+  );
 }
 
 export async function portfolioRoutes(app: FastifyInstance, { core }: ApiDeps): Promise<void> {
   const r = app.withTypeProvider<ZodTypeProvider>();
-  r.get('/summary', { preHandler: authenticated, config: { apiKey: 'READ' } }, async (req) => core.portfolio.summary(requireUser(req).userId));
-  r.get('/allocation', { preHandler: authenticated, config: { apiKey: 'READ' } }, async (req) => core.portfolio.allocation(requireUser(req).userId));
-  r.get('/holdings', { preHandler: authenticated, config: { apiKey: 'READ' } }, async (req) => core.portfolio.holdings(requireUser(req).userId));
+  r.get('/summary', { preHandler: authenticated, config: { apiKey: 'READ' } }, async (req) =>
+    core.portfolio.summary(requireUser(req).userId),
+  );
+  r.get('/allocation', { preHandler: authenticated, config: { apiKey: 'READ' } }, async (req) =>
+    core.portfolio.allocation(requireUser(req).userId),
+  );
+  r.get('/holdings', { preHandler: authenticated, config: { apiKey: 'READ' } }, async (req) =>
+    core.portfolio.holdings(requireUser(req).userId),
+  );
   r.get(
     '/performance',
-    { schema: { querystring: z.object({ range: z.enum(['24h', '7d', '30d', '90d', '1y']).default('30d') }) }, preHandler: authenticated, config: { apiKey: 'READ' } },
+    {
+      schema: { querystring: z.object({ range: z.enum(['24h', '7d', '30d', '90d', '1y']).default('30d') }) },
+      preHandler: authenticated,
+      config: { apiKey: 'READ' },
+    },
     async (req) => core.portfolio.performance(requireUser(req).userId, req.query.range),
   );
   r.get('/positions', { preHandler: authenticated, config: { apiKey: 'READ' } }, async (req) => {
@@ -50,19 +69,29 @@ export async function notificationRoutes(app: FastifyInstance, { core }: ApiDeps
       },
       preHandler: authenticated,
     },
-    async (req) => core.notifications.list(requireUser(req).userId, { ...req.query, unreadOnly: req.query.unread === 'true' }),
+    async (req) =>
+      core.notifications.list(requireUser(req).userId, { ...req.query, unreadOnly: req.query.unread === 'true' }),
   );
-  r.get('/unread-count', { preHandler: authenticated }, async (req) => ({ count: await core.notifications.unreadCount(requireUser(req).userId) }));
+  r.get('/unread-count', { preHandler: authenticated }, async (req) => ({
+    count: await core.notifications.unreadCount(requireUser(req).userId),
+  }));
   r.post('/:id/read', { schema: { params: z.object({ id: idString }) }, preHandler: authenticated }, async (req) => {
     const ok = await core.notifications.markRead(requireUser(req).userId, req.params.id);
     if (!ok) throw new AppError('NOT_FOUND', 'Notification not found or already read');
     return { ok: true };
   });
-  r.post('/read-all', { preHandler: authenticated }, async (req) => ({ updated: await core.notifications.markAllRead(requireUser(req).userId) }));
+  r.post('/read-all', { preHandler: authenticated }, async (req) => ({
+    updated: await core.notifications.markAllRead(requireUser(req).userId),
+  }));
 }
 
 export async function healthRoutes(app: FastifyInstance, { core, runner }: ApiDeps): Promise<void> {
-  app.get('/health', { config: { rateLimit: false } }, async () => ({ status: 'ok', service: 'api', mode: core.config.TRADING_MODE, ts: Date.now() }));
+  app.get('/health', { config: { rateLimit: false } }, async () => ({
+    status: 'ok',
+    service: 'api',
+    mode: core.config.TRADING_MODE,
+    ts: Date.now(),
+  }));
   // Public, cacheable platform status for clients (sandbox banner, server clock offset).
   app.get('/api/v1/system/status', { config: { rateLimit: false } }, async () => ({
     mode: core.config.TRADING_MODE,
@@ -80,7 +109,8 @@ export async function healthRoutes(app: FastifyInstance, { core, runner }: ApiDe
   });
   app.get('/metrics', { config: { rateLimit: false } }, async (req, reply) => {
     const token = core.config.METRICS_TOKEN;
-    if (token && req.headers.authorization !== `Bearer ${token}`) throw new AppError('UNAUTHORIZED', 'Metrics token required');
+    if (token && req.headers.authorization !== `Bearer ${token}`)
+      throw new AppError('UNAUTHORIZED', 'Metrics token required');
     const m = await renderMetrics();
     return reply.header('content-type', m.contentType).send(m.body);
   });

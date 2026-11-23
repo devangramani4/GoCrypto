@@ -6,8 +6,11 @@ import {
   type OrderRow,
   type PositionState,
   type TradeStreamEntry,
+  type BalanceChange,
+  type FeeAccrual,
   type Tx,
   type WalletRow,
+  accrueFees,
   applyFuturesFill,
   applyOptionFill,
   positionKey,
@@ -106,6 +109,10 @@ interface Ctx {
   states: Map<string, OrderState>;
   records: FillRecord[];
   positionsChanged: SettleOutput['positionsChanged'];
+  /** Spot balance changes, applied after trades/fills/orders are written so wallet locks are held briefly. */
+  pendingChanges: BalanceChange[];
+  /** Fee revenue, appended to fee_accruals instead of locking the fee collector's wallet. */
+  feeAccruals: FeeAccrual[];
 }
 
 /**
@@ -132,7 +139,10 @@ export class Settlement {
     const makerIds = result.fills.map((f) => f.makerOrderId);
     const stpIds = result.expiredMakers.map((e) => e.orderId);
     const userIds = [
-      ...new Set([...result.fills.flatMap((f) => [f.takerUserId, f.makerUserId]), ...result.expiredMakers.map((e) => e.userId)]),
+      ...new Set([
+        ...result.fills.flatMap((f) => [f.takerUserId, f.makerUserId]),
+        ...result.expiredMakers.map((e) => e.userId),
+      ]),
     ];
     const rates = await this.feeRates(userIds, market);
     await this.ensureWallets(market, userIds);
@@ -142,7 +152,8 @@ export class Settlement {
       const takerRow = rows.get(input.takerId);
       if (!takerRow) throw new BookDesyncError(`taker ${input.takerId} not found`);
       const takerOk =
-        takerRow.status === 'NEW' || (input.takerOpen && (takerRow.status === 'OPEN' || takerRow.status === 'PARTIALLY_FILLED'));
+        takerRow.status === 'NEW' ||
+        (input.takerOpen && (takerRow.status === 'OPEN' || takerRow.status === 'PARTIALLY_FILLED'));
       if (!takerOk) throw new AlreadyProcessedError(input.takerId, takerRow.status);
       const states = new Map<string, OrderState>();
       const taker = orderState(takerRow);
@@ -151,17 +162,25 @@ export class Settlement {
       for (const id of [...makerIds, ...stpIds]) {
         if (states.has(id)) continue;
         const r = rows.get(id);
-        if (!r || (r.status !== 'OPEN' && r.status !== 'PARTIALLY_FILLED')) throw new BookDesyncError(`maker ${id} is not open in the database`);
+        if (!r || (r.status !== 'OPEN' && r.status !== 'PARTIALLY_FILLED'))
+          throw new BookDesyncError(`maker ${id} is not open in the database`);
         states.set(id, orderState(r));
       }
-      const ctx: Ctx = { tx, market, states, records: [], positionsChanged: [] };
+      const ctx: Ctx = { tx, market, states, records: [], positionsChanged: [], pendingChanges: [], feeAccruals: [] };
 
-      if (market.type === 'SPOT') await this.spot(ctx, input, taker, rates);
+      if (market.type === 'SPOT') this.spot(ctx, input, taker, rates);
       else if (market.type === 'FUTURES') await this.futures(ctx, input, taker, rates);
       else await this.options(ctx, input, taker, rates);
 
       await this.persist(ctx, input);
-      return { orders: [...states.values()].filter((s) => s.changed), records: ctx.records, positionsChanged: ctx.positionsChanged };
+      // Wallets last: shared rows (busy accounts trading many markets) stay locked only until commit.
+      if (ctx.pendingChanges.length) await this.core.wallet.apply(tx, ctx.pendingChanges);
+      await accrueFees(tx, ctx.feeAccruals);
+      return {
+        orders: [...states.values()].filter((s) => s.changed),
+        records: ctx.records,
+        positionsChanged: ctx.positionsChanged,
+      };
     });
   }
 
@@ -186,7 +205,12 @@ export class Settlement {
 
   // ─────────────────────────────── spot ───────────────────────────────
 
-  private async spot(ctx: Ctx, input: SettleInput, taker: OrderState, rates: Map<string, { maker: Decimal; taker: Decimal }>) {
+  private spot(
+    ctx: Ctx,
+    input: SettleInput,
+    taker: OrderState,
+    rates: Map<string, { maker: Decimal; taker: Decimal }>,
+  ): void {
     const { market, result } = input;
     const sim = new BalanceSim(new Map());
     const base = market.baseAssetId;
@@ -198,16 +222,42 @@ export class Settlement {
       const maker = ctx.states.get(f.makerOrderId)!;
       const buyer = f.takerSide === 'BUY' ? taker : maker;
       const seller = f.takerSide === 'BUY' ? maker : taker;
-      const buyerRate = f.takerSide === 'BUY' ? rates.get(buyer.row.user_id)!.taker : rates.get(buyer.row.user_id)!.maker;
-      const sellerRate = f.takerSide === 'SELL' ? rates.get(seller.row.user_id)!.taker : rates.get(seller.row.user_id)!.maker;
+      const buyerRate =
+        f.takerSide === 'BUY' ? rates.get(buyer.row.user_id)!.taker : rates.get(buyer.row.user_id)!.maker;
+      const sellerRate =
+        f.takerSide === 'SELL' ? rates.get(seller.row.user_id)!.taker : rates.get(seller.row.user_id)!.maker;
       const buyerFee = FeeService.tradingFee(f.quantity, buyerRate);
       const sellerFee = FeeService.tradingFee(f.quote, sellerRate);
       const b = buyer.row.user_id;
       const s = seller.row.user_id;
-      sim.add(b, quote, 'SPOT', { locked: f.quote.neg() }, { type: 'TRADE_DEBIT', ...ref(f), idemKey: `t:${market.id}:${f.seq}:${buyer.row.id}:d` });
-      sim.add(b, base, 'SPOT', { available: f.quantity.minus(buyerFee) }, { type: 'TRADE_CREDIT', ...ref(f), idemKey: `t:${market.id}:${f.seq}:${buyer.row.id}:c` });
-      sim.add(s, base, 'SPOT', { locked: f.quantity.neg() }, { type: 'TRADE_DEBIT', ...ref(f), idemKey: `t:${market.id}:${f.seq}:${seller.row.id}:d` });
-      sim.add(s, quote, 'SPOT', { available: f.quote.minus(sellerFee) }, { type: 'TRADE_CREDIT', ...ref(f), idemKey: `t:${market.id}:${f.seq}:${seller.row.id}:c` });
+      sim.add(
+        b,
+        quote,
+        'SPOT',
+        { locked: f.quote.neg() },
+        { type: 'TRADE_DEBIT', ...ref(f), idemKey: `t:${market.id}:${f.seq}:${buyer.row.id}:d` },
+      );
+      sim.add(
+        b,
+        base,
+        'SPOT',
+        { available: f.quantity.minus(buyerFee) },
+        { type: 'TRADE_CREDIT', ...ref(f), idemKey: `t:${market.id}:${f.seq}:${buyer.row.id}:c` },
+      );
+      sim.add(
+        s,
+        base,
+        'SPOT',
+        { locked: f.quantity.neg() },
+        { type: 'TRADE_DEBIT', ...ref(f), idemKey: `t:${market.id}:${f.seq}:${seller.row.id}:d` },
+      );
+      sim.add(
+        s,
+        quote,
+        'SPOT',
+        { available: f.quote.minus(sellerFee) },
+        { type: 'TRADE_CREDIT', ...ref(f), idemKey: `t:${market.id}:${f.seq}:${seller.row.id}:c` },
+      );
       feeAgg.set(base, (feeAgg.get(base) ?? ZERO).plus(buyerFee));
       feeAgg.set(quote, (feeAgg.get(quote) ?? ZERO).plus(sellerFee));
       buyer.locked = buyer.locked.minus(f.quote);
@@ -260,18 +310,33 @@ export class Settlement {
       }
     }
 
-    this.creditFees(sim, feeAgg, 'SPOT', market, result);
-    await this.core.wallet.apply(ctx.tx, sim.changes);
+    for (const [assetId, amount] of feeAgg) {
+      ctx.feeAccruals.push({
+        assetId,
+        account: 'SPOT',
+        amount,
+        refType: 'TRADES',
+        refId: this.tradeRange(market, result),
+      });
+    }
+    ctx.pendingChanges = sim.changes;
   }
 
   // ─────────────────────────────── futures ───────────────────────────────
 
-  private async futures(ctx: Ctx, input: SettleInput, taker: OrderState, rates: Map<string, { maker: Decimal; taker: Decimal }>) {
+  private async futures(
+    ctx: Ctx,
+    input: SettleInput,
+    taker: OrderState,
+    rates: Map<string, { maker: Decimal; taker: Decimal }>,
+  ) {
     const { market, result, tx } = { ...input, tx: ctx.tx };
     const settle = market.quoteAssetId;
-    const feeUser = this.core.users.systemIds.feeCollector;
     const users = [...new Set([...ctx.states.values()].map((s) => String(s.row.user_id)))];
-    const wallets = await this.core.wallet.lockWallets(tx, [...users, feeUser].map((userId) => ({ userId, assetId: settle, account: 'FUTURES' as const })));
+    const wallets = await this.core.wallet.lockWallets(
+      tx,
+      users.map((userId) => ({ userId, assetId: settle, account: 'FUTURES' as const })),
+    );
     const positions = await this.core.futures.lockPositions(
       tx,
       [...ctx.states.values()].map((s) => ({
@@ -298,8 +363,10 @@ export class Settlement {
       if (!pos.side || pos.qty.isZero()) pos.marginMode = o.row.margin_mode ?? pos.marginMode;
       const side = o.row.side;
       const eff = applyFuturesFill(pos, side, qty, price, leverage);
-      if (eff.marginReleased.gt(0)) sim.release(userId, settle, 'FUTURES', eff.marginReleased, { type: 'MARGIN_UNLOCK', ...meta });
-      if (!eff.realizedPnl.isZero()) sim.add(userId, settle, 'FUTURES', { available: eff.realizedPnl }, { type: 'REALIZED_PNL', ...meta });
+      if (eff.marginReleased.gt(0))
+        sim.release(userId, settle, 'FUTURES', eff.marginReleased, { type: 'MARGIN_UNLOCK', ...meta });
+      if (!eff.realizedPnl.isZero())
+        sim.add(userId, settle, 'FUTURES', { available: eff.realizedPnl }, { type: 'REALIZED_PNL', ...meta });
       const rate = isMaker ? rates.get(userId)!.maker : rates.get(userId)!.taker;
       const fee = FeeService.tradingFee(qty.mul(price), rate);
       if (eff.marginNeeded.gt(0)) {
@@ -346,9 +413,14 @@ export class Settlement {
     this.finalizeTaker(taker, result);
     if (FINAL.includes(taker.status)) this.releaseRemaining(sim, taker, 'FUTURES');
 
-    if (feeTotal.gt(0)) {
-      sim.add(feeUser, settle, 'FUTURES', { available: feeTotal }, { type: 'FEE_REVENUE', refType: 'TRADES', refId: this.tradeRange(market, result) });
-    }
+    if (feeTotal.gt(0))
+      ctx.feeAccruals.push({
+        assetId: settle,
+        account: 'FUTURES',
+        amount: feeTotal,
+        refType: 'TRADES',
+        refId: this.tradeRange(market, result),
+      });
     await this.coverDeficits(tx, sim, wallets, users, settle, 'FUTURES', market, result);
     await this.core.wallet.apply(tx, sim.changes, wallets);
     await this.core.futures.savePositions(tx, positions.values());
@@ -356,13 +428,20 @@ export class Settlement {
 
   // ─────────────────────────────── options ───────────────────────────────
 
-  private async options(ctx: Ctx, input: SettleInput, taker: OrderState, rates: Map<string, { maker: Decimal; taker: Decimal }>) {
+  private async options(
+    ctx: Ctx,
+    input: SettleInput,
+    taker: OrderState,
+    rates: Map<string, { maker: Decimal; taker: Decimal }>,
+  ) {
     const { market, result } = input;
     const tx = ctx.tx;
     const settle = market.quoteAssetId;
-    const feeUser = this.core.users.systemIds.feeCollector;
     const users = [...new Set([...ctx.states.values()].map((s) => String(s.row.user_id)))];
-    const wallets = await this.core.wallet.lockWallets(tx, [...users, feeUser].map((userId) => ({ userId, assetId: settle, account: 'OPTIONS' as const })));
+    const wallets = await this.core.wallet.lockWallets(
+      tx,
+      users.map((userId) => ({ userId, assetId: settle, account: 'OPTIONS' as const })),
+    );
     const positions = await this.core.options.lockPositions(
       tx,
       users.map((userId) => ({ userId, marketId: market.id })),
@@ -377,7 +456,9 @@ export class Settlement {
       const pos = positions.get(`${userId}:${market.id}`)!;
       const meta = { refType: 'TRADE', refId: `${market.id}:${f.seq}` };
       const remainingBefore = (o.quantity ?? f.quantity).minus(o.filledQty);
-      const release = remainingBefore.lte(f.quantity) ? o.locked : dmin(o.locked, q18(o.locked.mul(f.quantity).div(remainingBefore)));
+      const release = remainingBefore.lte(f.quantity)
+        ? o.locked
+        : dmin(o.locked, q18(o.locked.mul(f.quantity).div(remainingBefore)));
       sim.release(userId, settle, 'OPTIONS', release, { type: 'ORDER_UNLOCK', ...meta });
       o.locked = o.locked.minus(release);
       const rate = isMaker ? rates.get(userId)!.maker : rates.get(userId)!.taker;
@@ -386,7 +467,8 @@ export class Settlement {
       const eff = applyOptionFill(pos, o.row.side, f.quantity, f.price);
       if (o.row.side === 'BUY') {
         sim.add(userId, settle, 'OPTIONS', { available: premium.neg() }, { type: 'OPTION_PREMIUM', ...meta });
-        if (eff.marginReleased.gt(0)) sim.release(userId, settle, 'OPTIONS', eff.marginReleased, { type: 'MARGIN_UNLOCK', ...meta });
+        if (eff.marginReleased.gt(0))
+          sim.release(userId, settle, 'OPTIONS', eff.marginReleased, { type: 'MARGIN_UNLOCK', ...meta });
       } else {
         sim.add(userId, settle, 'OPTIONS', { available: premium }, { type: 'OPTION_PREMIUM', ...meta });
         if (eff.opensShort && eff.openedQty.gt(0)) {
@@ -419,7 +501,15 @@ export class Settlement {
       const maker = ctx.states.get(f.makerOrderId)!;
       const t = applySide(taker, f, false);
       const m = applySide(maker, f, true);
-      ctx.records.push({ fill: f, takerFee: t.fee, takerFeeAssetId: settle, makerFee: m.fee, makerFeeAssetId: settle, takerPnl: t.pnl, makerPnl: m.pnl });
+      ctx.records.push({
+        fill: f,
+        takerFee: t.fee,
+        takerFeeAssetId: settle,
+        makerFee: m.fee,
+        makerFeeAssetId: settle,
+        takerPnl: t.pnl,
+        makerPnl: m.pnl,
+      });
       setStatus(maker, f.makerDone ? 'FILLED' : 'PARTIALLY_FILLED', f.makerDone ? 'FILLED' : 'PARTIAL_FILL');
       if (f.makerDone) this.releaseRemaining(sim, maker, 'OPTIONS');
     }
@@ -431,9 +521,14 @@ export class Settlement {
     }
     this.finalizeTaker(taker, result);
     if (FINAL.includes(taker.status)) this.releaseRemaining(sim, taker, 'OPTIONS');
-    if (feeTotal.gt(0)) {
-      sim.add(feeUser, settle, 'OPTIONS', { available: feeTotal }, { type: 'FEE_REVENUE', refType: 'TRADES', refId: this.tradeRange(market, result) });
-    }
+    if (feeTotal.gt(0))
+      ctx.feeAccruals.push({
+        assetId: settle,
+        account: 'OPTIONS',
+        amount: feeTotal,
+        refType: 'TRADES',
+        refId: this.tradeRange(market, result),
+      });
     await this.coverDeficits(tx, sim, wallets, users, settle, 'OPTIONS', market, result);
     await this.core.wallet.apply(tx, sim.changes, wallets);
     await this.core.options.savePositions(tx, positions.values());
@@ -465,9 +560,18 @@ export class Settlement {
       const avail = sim.available(userId, assetId, account);
       if (avail.isNegative()) {
         const deficit = avail.neg();
-        sim.add(userId, assetId, account, { available: deficit }, { type: 'INSURANCE_FUND', refType: 'BANKRUPTCY', refId: this.tradeRange(market, result) });
+        sim.add(
+          userId,
+          assetId,
+          account,
+          { available: deficit },
+          { type: 'INSURANCE_FUND', refType: 'BANKRUPTCY', refId: this.tradeRange(market, result) },
+        );
         total = total.plus(deficit);
-        this.core.log.warn({ userId, deficit: deficit.toFixed(), market: market.symbol }, 'insurance fund covered trading deficit');
+        this.core.log.warn(
+          { userId, deficit: deficit.toFixed(), market: market.symbol },
+          'insurance fund covered trading deficit',
+        );
       }
     }
     if (total.gt(0)) {
@@ -475,14 +579,22 @@ export class Settlement {
       if (!wallets.has(insKey)) {
         await this.core.wallet.lockWallets(tx, [{ userId: ins, assetId, account }], wallets);
       }
-      sim.add(ins, assetId, account, { available: total.neg() }, { type: 'INSURANCE_FUND', refType: 'BANKRUPTCY', refId: this.tradeRange(market, result) });
+      sim.add(
+        ins,
+        assetId,
+        account,
+        { available: total.neg() },
+        { type: 'INSURANCE_FUND', refType: 'BANKRUPTCY', refId: this.tradeRange(market, result) },
+      );
     }
   }
 
   private finalizeTaker(taker: OrderState, result: MatchResult): void {
     if (result.outcome === 'REJECTED') {
       const expire = result.rejectReason === 'POST_ONLY_WOULD_TAKE' || result.rejectReason === 'FOK_NOT_FILLABLE';
-      setStatus(taker, expire ? 'EXPIRED' : 'REJECTED', expire ? 'EXPIRED' : 'REJECTED', { reason: result.rejectReason });
+      setStatus(taker, expire ? 'EXPIRED' : 'REJECTED', expire ? 'EXPIRED' : 'REJECTED', {
+        reason: result.rejectReason,
+      });
       taker.rejectReason = result.rejectReason ?? 'REJECTED';
       return;
     }
@@ -491,12 +603,17 @@ export class Settlement {
       return;
     }
     if (result.outcome === 'RESTING') {
-      setStatus(taker, taker.filledQty.gt(0) ? 'PARTIALLY_FILLED' : 'OPEN', taker.filledQty.gt(0) ? 'PARTIAL_FILL' : 'ACCEPTED');
+      setStatus(
+        taker,
+        taker.filledQty.gt(0) ? 'PARTIALLY_FILLED' : 'OPEN',
+        taker.filledQty.gt(0) ? 'PARTIAL_FILL' : 'ACCEPTED',
+      );
       taker.engineSeq = String(result.rested!.seq);
       return;
     }
     setStatus(taker, 'EXPIRED', 'EXPIRED', { reason: result.rejectReason ?? result.stopReason });
-    taker.rejectReason = result.rejectReason ?? (result.stopReason && result.stopReason !== 'FILLED' ? result.stopReason : null);
+    taker.rejectReason =
+      result.rejectReason ?? (result.stopReason && result.stopReason !== 'FILLED' ? result.stopReason : null);
   }
 
   /** Release whatever is still reserved for an order (it is final or fully consumed). */
@@ -512,15 +629,6 @@ export class Settlement {
     });
     o.locked = ZERO;
     o.changed = true;
-  }
-
-  private creditFees(sim: BalanceSim, feeAgg: Map<number, Decimal>, account: 'SPOT', market: MarketInfo, result: MatchResult): void {
-    const feeUser = this.core.users.systemIds.feeCollector;
-    for (const [assetId, amount] of feeAgg) {
-      if (amount.gt(0)) {
-        sim.add(feeUser, assetId, account, { available: amount }, { type: 'FEE_REVENUE', refType: 'TRADES', refId: this.tradeRange(market, result) });
-      }
-    }
   }
 
   private async persist(ctx: Ctx, input: SettleInput): Promise<void> {
@@ -557,13 +665,33 @@ export class Settlement {
       for (const r of ctx.records) {
         const makerSide = r.fill.takerSide === 'BUY' ? 'SELL' : 'BUY';
         fillRows.push([
-          r.fill.takerOrderId, r.tradeId, r.fill.takerUserId, market.id, market.type, r.fill.takerSide, 0,
-          toDb(r.fill.price), toDb(r.fill.quantity), toDb(r.fill.quote), toDb(r.takerFee), r.takerFeeAssetId,
+          r.fill.takerOrderId,
+          r.tradeId,
+          r.fill.takerUserId,
+          market.id,
+          market.type,
+          r.fill.takerSide,
+          0,
+          toDb(r.fill.price),
+          toDb(r.fill.quantity),
+          toDb(r.fill.quote),
+          toDb(r.takerFee),
+          r.takerFeeAssetId,
           r.takerPnl === null ? null : toDb(r.takerPnl),
         ]);
         fillRows.push([
-          r.fill.makerOrderId, r.tradeId, r.fill.makerUserId, market.id, market.type, makerSide, 1,
-          toDb(r.fill.price), toDb(r.fill.quantity), toDb(r.fill.quote), toDb(r.makerFee), r.makerFeeAssetId,
+          r.fill.makerOrderId,
+          r.tradeId,
+          r.fill.makerUserId,
+          market.id,
+          market.type,
+          makerSide,
+          1,
+          toDb(r.fill.price),
+          toDb(r.fill.quantity),
+          toDb(r.fill.quote),
+          toDb(r.makerFee),
+          r.makerFeeAssetId,
           r.makerPnl === null ? null : toDb(r.makerPnl),
         ]);
       }
@@ -578,7 +706,14 @@ export class Settlement {
     for (const o of ctx.states.values()) {
       if (!o.changed) continue;
       await this.saveOrder(tx, o);
-      for (const h of o.history) history.push({ orderId: o.row.id, userId: String(o.row.user_id), event: h.event, status: o.status, details: h.details });
+      for (const h of o.history)
+        history.push({
+          orderId: o.row.id,
+          userId: String(o.row.user_id),
+          event: h.event,
+          status: o.status,
+          details: h.details,
+        });
     }
     await this.core.orders.addHistory(tx, history);
   }
@@ -630,7 +765,13 @@ export class Settlement {
       }
       await this.core.orders.addHistory(
         tx,
-        changed.map((o) => ({ orderId: o.row.id, userId: String(o.row.user_id), event: o.status, status: o.status, details: { reason } })),
+        changed.map((o) => ({
+          orderId: o.row.id,
+          userId: String(o.row.user_id),
+          event: o.status,
+          status: o.status,
+          details: { reason },
+        })),
       );
       if (sim.changes.length) await this.core.wallet.apply(tx, sim.changes);
       return changed;
@@ -648,7 +789,9 @@ export class Settlement {
       const sim = new BalanceSim(new Map());
       this.releaseRemaining(sim, o, row.market_type);
       await this.saveOrder(tx, o);
-      await this.core.orders.addHistory(tx, [{ orderId, userId: String(row.user_id), event: status, status, details: { reason } }]);
+      await this.core.orders.addHistory(tx, [
+        { orderId, userId: String(row.user_id), event: status, status, details: { reason } },
+      ]);
       if (sim.changes.length) await this.core.wallet.apply(tx, sim.changes);
       return o;
     });
@@ -698,7 +841,10 @@ export class Settlement {
     return out;
   }
 
-  static publicTrades(market: MarketInfo, records: FillRecord[]): { trades: PublicTradeDto[]; stream: TradeStreamEntry[] } {
+  static publicTrades(
+    market: MarketInfo,
+    records: FillRecord[],
+  ): { trades: PublicTradeDto[]; stream: TradeStreamEntry[] } {
     const now = Date.now();
     const trades: PublicTradeDto[] = records.map((r) => ({
       id: r.tradeId ?? String(r.fill.seq),

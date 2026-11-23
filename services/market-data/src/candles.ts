@@ -9,7 +9,17 @@ import {
   type TradeStreamEntry,
   liveCandleKey,
 } from '@gocrypto/server-core';
-import { type Candle, D, STORED_TIMEFRAMES, TIMEFRAMES, type Timeframe, ZERO, bucketStart, toDb, toPlain } from '@gocrypto/trading-utils';
+import {
+  type Candle,
+  D,
+  STORED_TIMEFRAMES,
+  TIMEFRAMES,
+  type Timeframe,
+  ZERO,
+  bucketStart,
+  toDb,
+  toPlain,
+} from '@gocrypto/trading-utils';
 
 interface MinuteBucket {
   t: number;
@@ -35,6 +45,9 @@ export class CandleAndTickerService {
   private closed: { key: string; candle: Candle }[] = [];
   private readonly minutes = new Map<number, MinuteBucket[]>(); // marketId -> last 24h of 1m buckets
   private readonly tickerDirty = new Set<number>();
+  /** Spot/futures tickers changed since the last all-tickers broadcast (the broadcast is a delta). */
+  private readonly allTickersDirty = new Set<string>();
+  private publishingTickers = false;
   private consumer: StreamConsumer<TradeStreamEntry> | null = null;
   private flushTimer: NodeJS.Timeout | null = null;
   private tickerTimer: NodeJS.Timeout | null = null;
@@ -56,7 +69,10 @@ export class CandleAndTickerService {
       { batch: 1000, blockMs: 1000, startId: '$' },
     );
     await this.consumer.start();
-    this.flushTimer = setInterval(() => void this.flush().catch((e) => this.core.log.error({ err: e }, 'candle flush failed')), 3000);
+    this.flushTimer = setInterval(
+      () => void this.flush().catch((e) => this.core.log.error({ err: e }, 'candle flush failed')),
+      3000,
+    );
     this.tickerTimer = setInterval(() => void this.publishTickers(), 500);
     this.allTickersTimer = setInterval(() => void this.publishAllTickers(), 2000);
   }
@@ -118,7 +134,16 @@ export class CandleAndTickerService {
       let c = this.candles.get(k);
       if (!c || c.openTime < start) {
         if (c && this.dirty.has(k)) this.closed.push({ key: k, candle: c });
-        c = { openTime: start, open: t.price, high: t.price, low: t.price, close: t.price, volume: '0', quoteVolume: '0', trades: 0 };
+        c = {
+          openTime: start,
+          open: t.price,
+          high: t.price,
+          low: t.price,
+          close: t.price,
+          volume: '0',
+          quoteVolume: '0',
+          trades: 0,
+        };
         this.candles.set(k, c);
       }
       if (c.openTime > start) continue; // late trade for an older bucket: ignore for live state
@@ -135,7 +160,16 @@ export class CandleAndTickerService {
     const minute = bucketStart(t.ts, '1m');
     let last = list[list.length - 1];
     if (!last || last.t < minute) {
-      last = { t: minute, open: t.price, high: t.price, low: t.price, close: t.price, volume: '0', quoteVolume: '0', trades: 0 };
+      last = {
+        t: minute,
+        open: t.price,
+        high: t.price,
+        low: t.price,
+        close: t.price,
+        volume: '0',
+        quoteVolume: '0',
+        trades: 0,
+      };
       list.push(last);
     }
     if (D(t.price).gt(last.high)) last.high = t.price;
@@ -162,7 +196,16 @@ export class CandleAndTickerService {
       this.core.bus.ws(marketChannel(market.symbol, `candles:${tf}`), 'candle', {
         symbol: market.symbol,
         interval: tf,
-        candle: { t: c.openTime, o: c.open, h: c.high, l: c.low, c: c.close, v: c.volume, qv: c.quoteVolume, n: c.trades },
+        candle: {
+          t: c.openTime,
+          o: c.open,
+          h: c.high,
+          l: c.low,
+          c: c.close,
+          v: c.volume,
+          qv: c.quoteVolume,
+          n: c.trades,
+        },
       });
     }
     await pipe.exec();
@@ -180,7 +223,18 @@ export class CandleAndTickerService {
     const push = (k: string, c: Candle) => {
       const [marketId, tf] = k.split(':') as [string, Timeframe];
       if (!STORED_TIMEFRAMES.includes(tf)) return;
-      rows.push([Number(marketId), tf, c.openTime, toDb(c.open), toDb(c.high), toDb(c.low), toDb(c.close), toDb(c.volume), toDb(c.quoteVolume), c.trades]);
+      rows.push([
+        Number(marketId),
+        tf,
+        c.openTime,
+        toDb(c.open),
+        toDb(c.high),
+        toDb(c.low),
+        toDb(c.close),
+        toDb(c.volume),
+        toDb(c.quoteVolume),
+        c.trades,
+      ]);
     };
     for (const { key: k, candle } of closed) push(k, candle);
     for (const k of keys) {
@@ -264,31 +318,49 @@ export class CandleAndTickerService {
   }
 
   private async publishTickers(): Promise<void> {
-    if (!this.tickerDirty.size) return;
-    const ids = [...this.tickerDirty];
-    this.tickerDirty.clear();
-    const pipe = this.core.redis.pub.pipeline();
-    for (const id of ids) {
-      const market = this.core.markets.byId(id);
-      if (!market) continue;
-      const t = this.ticker(market);
-      if (!t) continue;
-      const book = await this.core.prices.orderBook(market.symbol);
-      if (book) {
-        t.bestBid = book.bids[0]?.[0] ?? null;
-        t.bestBidQty = book.bids[0]?.[1] ?? null;
-        t.bestAsk = book.asks[0]?.[0] ?? null;
-        t.bestAskQty = book.asks[0]?.[1] ?? null;
-      }
-      pipe.set(PriceService.tickerKey(market.symbol), JSON.stringify(t));
-      this.core.bus.ws(marketChannel(market.symbol, 'ticker'), 'ticker', t);
+    // setInterval does not wait for async work: never let two publishes overlap under load.
+    if (this.publishingTickers || !this.tickerDirty.size) return;
+    this.publishingTickers = true;
+    try {
+      const markets = [...this.tickerDirty]
+        .map((id) => this.core.markets.byId(id))
+        .filter((m): m is NonNullable<typeof m> => Boolean(m));
+      this.tickerDirty.clear();
+      if (!markets.length) return;
+      // One MGET for every dirty market's book instead of a round trip per market.
+      const books = await this.core.redis.main.mget(...markets.map((m) => PriceService.bookKey(m.symbol)));
+      const pipe = this.core.redis.pub.pipeline();
+      markets.forEach((market, i) => {
+        const t = this.ticker(market);
+        if (!t) return;
+        const raw = books[i];
+        if (raw) {
+          try {
+            const book = JSON.parse(raw) as { bids: [string, string][]; asks: [string, string][] };
+            t.bestBid = book.bids[0]?.[0] ?? null;
+            t.bestBidQty = book.bids[0]?.[1] ?? null;
+            t.bestAsk = book.asks[0]?.[0] ?? null;
+            t.bestAskQty = book.asks[0]?.[1] ?? null;
+          } catch {
+            // keep the ticker without top-of-book
+          }
+        }
+        pipe.set(PriceService.tickerKey(market.symbol), JSON.stringify(t));
+        this.core.bus.ws(marketChannel(market.symbol, 'ticker'), 'ticker', t);
+        if (market.type !== 'OPTIONS') this.allTickersDirty.add(market.symbol);
+      });
+      await pipe.exec();
+    } finally {
+      this.publishingTickers = false;
     }
-    await pipe.exec();
   }
 
+  /** Delta broadcast: only tickers that changed since the last one (clients merge into their REST snapshot). */
   private async publishAllTickers(): Promise<void> {
-    const markets = this.core.markets.list().filter((m) => m.type !== 'OPTIONS' && m.status === 'TRADING');
-    const map = await this.core.prices.tickers(markets.map((m) => m.symbol));
-    this.core.bus.ws(ALL_TICKERS_CHANNEL, 'tickers', [...map.values()]);
+    if (!this.allTickersDirty.size) return;
+    const symbols = [...this.allTickersDirty];
+    this.allTickersDirty.clear();
+    const map = await this.core.prices.tickers(symbols);
+    if (map.size) this.core.bus.ws(ALL_TICKERS_CHANNEL, 'tickers', [...map.values()]);
   }
 }

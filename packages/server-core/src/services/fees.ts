@@ -3,6 +3,7 @@ import { D, type Decimal, type DecimalLike, dmin, q18Up, toPlain } from '@gocryp
 import type { MarketInfo } from '../cache/markets';
 import type { Database } from '../db/database';
 import { toMs } from '../db/database';
+import { TtlCache } from '../cache/ttl-cache';
 
 export interface FeeRates {
   maker: string;
@@ -28,16 +29,20 @@ const FALLBACK: Record<MarketType, FeeRates> = {
  */
 export class FeeService {
   private schedule = new Map<string, FeeRates>();
-  private overrides = new Map<string, { rates: FeeRates | null; expiresAt: number | null; fetchedAt: number }>();
+  private overrides = new TtlCache<string, { rates: FeeRates | null; expiresAt: number | null }>(200_000, 60_000);
 
   constructor(private readonly db: Database) {}
 
   async load(): Promise<void> {
-    const rows = await this.db.query<{ market_type: MarketType; vip_tier: number; maker_rate: string; taker_rate: string }>(
-      'SELECT market_type, vip_tier, maker_rate, taker_rate FROM fees',
-    );
+    const rows = await this.db.query<{
+      market_type: MarketType;
+      vip_tier: number;
+      maker_rate: string;
+      taker_rate: string;
+    }>('SELECT market_type, vip_tier, maker_rate, taker_rate FROM fees');
     const next = new Map<string, FeeRates>();
-    for (const r of rows) next.set(`${r.market_type}:${r.vip_tier}`, { maker: toPlain(r.maker_rate), taker: toPlain(r.taker_rate) });
+    for (const r of rows)
+      next.set(`${r.market_type}:${r.vip_tier}`, { maker: toPlain(r.maker_rate), taker: toPlain(r.taker_rate) });
     this.schedule = next;
     this.overrides.clear();
   }
@@ -52,23 +57,21 @@ export class FeeService {
   }
 
   invalidateUser(userId: string): void {
-    for (const k of this.overrides.keys()) if (k.startsWith(`${userId}:`)) this.overrides.delete(k);
+    this.overrides.deleteWhere((k) => k.startsWith(`${userId}:`));
   }
 
   private async userOverride(userId: string, type: MarketType): Promise<FeeRates | null> {
     const k = `${userId}:${type}`;
     const cached = this.overrides.get(k);
     const now = Date.now();
-    if (cached && now - cached.fetchedAt < 60_000) {
-      return cached.rates && (!cached.expiresAt || cached.expiresAt > now) ? cached.rates : null;
-    }
+    if (cached) return cached.rates && (!cached.expiresAt || cached.expiresAt > now) ? cached.rates : null;
     const row = await this.db.one<{ maker_rate: string; taker_rate: string; expires_at: Date | null }>(
       'SELECT maker_rate, taker_rate, expires_at FROM user_fees WHERE user_id = ? AND market_type = ?',
       [userId, type],
     );
     const rates = row ? { maker: toPlain(row.maker_rate), taker: toPlain(row.taker_rate) } : null;
     const expiresAt = row ? toMs(row.expires_at) : null;
-    this.overrides.set(k, { rates, expiresAt, fetchedAt: now });
+    this.overrides.set(k, { rates, expiresAt });
     return rates && (!expiresAt || expiresAt > now) ? rates : null;
   }
 
@@ -83,7 +86,9 @@ export class FeeService {
     const override = await this.userOverride(user.id, market.type);
     if (override) return override;
     const tierRates =
-      this.schedule.get(`${market.type}:${user.vipTier}`) ?? this.schedule.get(`${market.type}:0`) ?? FALLBACK[market.type];
+      this.schedule.get(`${market.type}:${user.vipTier}`) ??
+      this.schedule.get(`${market.type}:0`) ??
+      FALLBACK[market.type];
     return {
       maker: market.makerFeeRate ?? tierRates.maker,
       taker: market.takerFeeRate ?? tierRates.taker,

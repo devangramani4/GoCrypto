@@ -5,12 +5,12 @@ import {
   type EngineCommand,
   type EngineGateway,
   type EngineResult,
-  STREAMS,
-  StreamConsumer,
+  PipelinedStreamConsumer,
   type SubmitOptions,
   key,
 } from '@gocrypto/server-core';
 import type { EngineRunner } from '../runner/engine-runner';
+import { EngineShardMap } from './shards';
 
 interface CommandEnvelope {
   cmd: EngineCommand;
@@ -38,16 +38,19 @@ export class InProcessEngineGateway implements EngineGateway {
 }
 
 /**
- * Producer side for a standalone engine: commands go to a durable Redis stream; results come back
- * on a per-node pub/sub channel. A timeout returns null (the order is still processed and the
- * client is informed through WebSocket order updates).
+ * Producer side for standalone engines: each command goes to the durable Redis stream of the shard
+ * that owns its market; results come back on a per-node pub/sub channel. A timeout returns null (the
+ * order is still processed and the client is informed through WebSocket order updates).
  */
 export class RedisEngineGateway implements EngineGateway {
   private readonly replyChannel = key('engine', 'reply', randomUUID());
   private readonly waiters = new Map<string, { resolve: (r: EngineResult | null) => void; timer: NodeJS.Timeout }>();
+  private readonly shards: EngineShardMap;
   private started = false;
 
-  constructor(private readonly core: Core) {}
+  constructor(private readonly core: Core) {
+    this.shards = EngineShardMap.fromConfig(core);
+  }
 
   async start(): Promise<this> {
     if (this.started) return this;
@@ -75,8 +78,9 @@ export class RedisEngineGateway implements EngineGateway {
     const requestId = randomUUID();
     const wait = opts.awaitResult !== false;
     const envelope: CommandEnvelope = { cmd, requestId, replyTo: wait ? this.replyChannel : null, ts: Date.now() };
+    const stream = this.shards.streamFor(cmd.marketId);
     if (!wait) {
-      await this.core.bus.appendStream(STREAMS.engineCommands, envelope, 1_000_000);
+      await this.core.bus.appendStream(stream, envelope, 1_000_000);
       return null;
     }
     const result = new Promise<EngineResult | null>((resolve) => {
@@ -86,7 +90,7 @@ export class RedisEngineGateway implements EngineGateway {
       }, opts.timeoutMs ?? this.core.config.ENGINE_REPLY_TIMEOUT_MS);
       this.waiters.set(requestId, { resolve, timer });
     });
-    await this.core.bus.appendStream(STREAMS.engineCommands, envelope, 1_000_000);
+    await this.core.bus.appendStream(stream, envelope, 1_000_000);
     return result;
   }
 
@@ -100,32 +104,31 @@ export class RedisEngineGateway implements EngineGateway {
   }
 }
 
-/** Engine side: consumes the command stream and replies to producers. */
+/** Engine side: consumes its shard's command stream and replies to producers. */
 export class EngineCommandConsumer {
-  private consumer: StreamConsumer<CommandEnvelope> | null = null;
+  private consumer: PipelinedStreamConsumer<CommandEnvelope> | null = null;
 
   constructor(
     private readonly core: Core,
     private readonly runner: EngineRunner,
+    private readonly stream: string,
   ) {}
 
   async start(): Promise<void> {
-    this.consumer = new StreamConsumer<CommandEnvelope>(
+    // Pipelined: runner.submit() is called in stream order (it enqueues onto the market's chain
+    // synchronously), so per-market order is preserved while other markets keep flowing.
+    this.consumer = new PipelinedStreamConsumer<CommandEnvelope>(
       this.core.redis.blocking('engine-commands'),
-      STREAMS.engineCommands,
+      this.stream,
       'matching-engine',
       `${hostname()}-${process.pid}`,
-      async (messages) => {
-        await Promise.all(
-          messages.map(async (m) => {
-            const result = await this.runner.submit(m.data.cmd);
-            if (m.data.replyTo) {
-              await this.core.redis.pub.publish(m.data.replyTo, JSON.stringify({ requestId: m.data.requestId, result }));
-            }
-          }),
-        );
+      async (m) => {
+        const result = await this.runner.submit(m.data.cmd);
+        if (m.data.replyTo) {
+          await this.core.redis.pub.publish(m.data.replyTo, JSON.stringify({ requestId: m.data.requestId, result }));
+        }
       },
-      { batch: 500, blockMs: 1000 },
+      { batch: 500, blockMs: 1000, maxInFlight: 5000 },
     );
     await this.consumer.start();
   }

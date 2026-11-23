@@ -1,3 +1,4 @@
+import { createHmac, timingSafeEqual } from 'node:crypto';
 import cookie from '@fastify/cookie';
 import cors from '@fastify/cors';
 import helmet from '@fastify/helmet';
@@ -5,7 +6,7 @@ import rateLimit from '@fastify/rate-limit';
 import swagger from '@fastify/swagger';
 import swaggerUi from '@fastify/swagger-ui';
 import { getLogger } from '@gocrypto/server-core';
-import Fastify, { type FastifyBaseLogger, type FastifyInstance, LogController } from 'fastify';
+import Fastify, { type FastifyBaseLogger, type FastifyInstance, type FastifyRequest, LogController } from 'fastify';
 import { jsonSchemaTransform, serializerCompiler, validatorCompiler } from 'fastify-type-provider-zod';
 import type { ApiDeps } from './deps';
 import { registerAuth } from './plugins/auth';
@@ -23,6 +24,43 @@ export interface BuildOptions {
   logRequests?: boolean;
   rateLimit?: boolean;
   docs?: boolean;
+}
+
+/**
+ * Rate-limit identity: the verified user (access token) or API key, falling back to the client IP.
+ * Keying by user keeps users behind carrier-grade NAT or office proxies from sharing one budget. The
+ * token signature is checked (constant-time HMAC) so nobody can spend another user's budget with a
+ * forged token; the edge proxy still enforces per-IP limits.
+ */
+function rateLimitKey(secret: string): (req: FastifyRequest) => string {
+  const key = Buffer.from(secret, 'utf8');
+  return (req) => {
+    const auth = req.headers.authorization;
+    if (auth?.startsWith('Bearer ')) {
+      const parts = auth.slice(7).split('.');
+      if (parts.length === 3) {
+        const expected = createHmac('sha256', key).update(`${parts[0]}.${parts[1]}`).digest();
+        const given = Buffer.from(parts[2]!, 'base64url');
+        if (given.length === expected.length && timingSafeEqual(given, expected)) {
+          try {
+            const claims = JSON.parse(Buffer.from(parts[1]!, 'base64url').toString('utf8')) as {
+              sub?: unknown;
+              exp?: number;
+            };
+            if (typeof claims.sub === 'string' && (!claims.exp || claims.exp * 1000 > Date.now()))
+              return `u:${claims.sub}`;
+          } catch {
+            // fall through to IP
+          }
+        }
+      }
+    }
+    // API keys are signed per request, which cannot be checked here without a lookup: combine the key
+    // with the IP so a leaked key id cannot be used to drain the owner's budget from elsewhere.
+    const apiKey = req.headers['x-gc-apikey'];
+    if (typeof apiKey === 'string' && apiKey.length <= 64) return `k:${apiKey}:${req.ip}`;
+    return `ip:${req.ip}`;
+  };
 }
 
 export async function buildApp(deps: ApiDeps, opts: BuildOptions = {}): Promise<FastifyInstance> {
@@ -53,7 +91,11 @@ export async function buildApp(deps: ApiDeps, opts: BuildOptions = {}): Promise<
   });
   await app.register(cors, {
     origin: (origin, cb) => {
-      if (!origin || core.config.CORS_ORIGINS.includes(origin) || (!core.config.isProduction && /^http:\/\/(localhost|127\.0\.0\.1)(:\d+)?$/.test(origin))) {
+      if (
+        !origin ||
+        core.config.CORS_ORIGINS.includes(origin) ||
+        (!core.config.isProduction && /^http:\/\/(localhost|127\.0\.0\.1)(:\d+)?$/.test(origin))
+      ) {
         cb(null, true);
       } else cb(new Error('Origin not allowed'), false);
     },
@@ -81,9 +123,9 @@ export async function buildApp(deps: ApiDeps, opts: BuildOptions = {}): Promise<
       max: core.config.RATE_LIMIT_MAX,
       timeWindow: core.config.RATE_LIMIT_WINDOW_MS,
       redis: core.redis.main,
-      nameSpace: 'gc:rl:ip:',
+      nameSpace: 'gc:rl:',
       skipOnError: true,
-      keyGenerator: (req) => req.ip,
+      keyGenerator: rateLimitKey(core.config.JWT_SECRET),
       errorResponseBuilder: (_req, ctx) => ({
         statusCode: 429,
         error: { code: 'RATE_LIMITED', message: `Rate limit exceeded, retry in ${Math.ceil(ctx.ttl / 1000)}s` },

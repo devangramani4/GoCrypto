@@ -79,10 +79,11 @@ export interface TransactionOptions {
 export class Database implements Executor {
   constructor(readonly pool: Pool) {}
 
-  static connect(url: string, poolSize = 20): Database {
+  static connect(url: string, poolSize = 20, opts: { trace?: boolean } = {}): Database {
     const pool = mysql.createPool({
       uri: url,
       connectionLimit: poolSize,
+      trace: opts.trace ?? false,
       waitForConnections: true,
       queueLimit: 0,
       supportBigNumbers: true,
@@ -101,13 +102,12 @@ export class Database implements Executor {
       },
     });
     // Every session runs in UTC with READ COMMITTED (row locks via FOR UPDATE, fewer gap locks).
-    (pool as unknown as { pool: { on: (ev: string, cb: (c: { query: (s: string) => void }) => void) => void } }).pool.on(
-      'connection',
-      (conn) => {
-        conn.query("SET SESSION time_zone = '+00:00'");
-        conn.query('SET SESSION TRANSACTION ISOLATION LEVEL READ COMMITTED');
-      },
-    );
+    (
+      pool as unknown as { pool: { on: (ev: string, cb: (c: { query: (s: string) => void }) => void) => void } }
+    ).pool.on('connection', (conn) => {
+      conn.query("SET SESSION time_zone = '+00:00'");
+      conn.query('SET SESSION TRANSACTION ISOLATION LEVEL READ COMMITTED');
+    });
     return new Database(pool);
   }
 
