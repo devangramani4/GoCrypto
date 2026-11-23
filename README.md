@@ -30,7 +30,7 @@ on **web**, **desktop** (Windows/macOS/Linux) and **mobile** (iOS/Android), plus
 ## Architecture
 
 ```
-apps/        web (React + Vite) · desktop (Electron) · mobile (React Native/Expo) · admin (React)
+apps/        web (React + Vite) · desktop (Electron) · mobile (bare React Native) · admin (React)
 services/    api · websocket · matching-engine · risk-engine · market-data · workers
 packages/    shared-types · trading-utils · validation · server-core · api-client · ui
 database/    SQL migrations, migration/seed CLIs, seed data
@@ -54,7 +54,8 @@ pnpm dev                           # backend services + web app → http://local
 pnpm dev:admin                     # admin console → http://localhost:5174
 ```
 
-Desktop: `pnpm --filter @gocrypto/desktop dev` · Mobile: `pnpm --filter @gocrypto/mobile start` (Expo).
+Desktop: `pnpm --filter @gocrypto/desktop dev` · Mobile: `pnpm --filter @gocrypto/mobile start`, then
+`pnpm --filter @gocrypto/mobile android` / `ios` (bare React Native — see [apps/mobile/README.md](apps/mobile/README.md)).
 
 With Docker: `docker compose up -d --build` (web on :8080, admin on :8081; add `--profile monitoring` for
 Prometheus and Grafana). See [docs/DEPLOYMENT.md](docs/DEPLOYMENT.md).

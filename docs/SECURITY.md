@@ -17,7 +17,9 @@
   scoped to `/api/v1/auth`. Cookie-authenticated requests must also carry the custom `X-GC-Client` header,
   which cross-site forms cannot send (CSRF defence in depth).
 - **Desktop**: tokens encrypted with the OS keychain (Electron `safeStorage`); memory-only when no real
-  OS encryption is available. **Mobile**: Expo SecureStore (Keychain / Keystore) + optional biometric lock.
+  OS encryption is available. **Mobile**: iOS Keychain / Android Keystore via react-native-keychain
+  (device-only items, never synced to iCloud) + optional biometric app lock gated by the OS (Face ID / Touch ID /
+  fingerprint or device passcode). Build-time `GOCRYPTO_*` settings are public and never hold secrets.
 - **2FA**: TOTP (RFC 6238) with replay protection (a code is accepted once) and single-use backup codes;
   TOTP secrets are encrypted at rest with AES-256-GCM (`ENCRYPTION_KEY`).
 - **Security PIN** for withdrawals and internal transfers, with lockout.

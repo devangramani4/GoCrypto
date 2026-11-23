@@ -21,7 +21,8 @@ Configuration is environment-only (12-factor). `.env.example` documents every va
 | `ENCRYPTION_KEY`                                                     | base64 32-byte key for AES-256-GCM (2FA and API-key secrets) — back it up; losing it invalidates 2FA |
 | `API_KEYS`                                                           | Internal service API keys for automation                                                             |
 | `MARKET_DATA_URL`, `MARKET_DATA_MODE`                                | External index feed                                                                                  |
-| `EMAIL_CONFIG`, `SMS_CONFIG`, `PUSH_PROVIDER`                        | Notification channels (`log` in development)                                                         |
+| `EMAIL_CONFIG`, `SMS_CONFIG`, `PUSH_PROVIDER`                        | Notification channels (`log` in development; `PUSH_PROVIDER=fcm` for mobile push)                    |
+| `FCM_SERVICE_ACCOUNT`                                                | Firebase service-account key for push (secret manager only; validated at start-up)                   |
 | `CORS_ORIGINS`, `WEB_APP_URL`, `ADMIN_APP_URL`, `DESKTOP_APP_ORIGIN` | Allowed browser origins                                                                              |
 | `TRUST_PROXY`                                                        | `true` behind Nginx/LB so rate limits and audit logs see the client IP                               |
 | `ENGINE_MODE`                                                        | `redis` (dedicated matching-engine service) or `inprocess` (single node)                             |
@@ -38,7 +39,7 @@ pnpm db:migrate && pnpm db:seed  # schema + assets, markets, fees, system accoun
 pnpm dev                         # all backend services + web on http://localhost:5173
 pnpm dev:admin                   # admin console on http://localhost:5174
 pnpm --filter @gocrypto/desktop dev
-pnpm --filter @gocrypto/mobile start
+pnpm --filter @gocrypto/mobile start    # Metro; then `android` / `ios` (see apps/mobile/README.md)
 ```
 
 ## Docker Compose (staging / single host)
@@ -98,7 +99,8 @@ the same configuration as the compose edge proxy.
 3. Roll stateless services one replica at a time (`api`, `websocket`, `workers`).
 4. Roll the matching engine: start the new standby, stop the old leader (SIGTERM drains the command chains;
    the standby acquires leadership and rebuilds books). Repeat for risk-engine and market-data.
-5. Deploy the web/admin images; desktop and mobile releases go through their stores/update channels.
+5. Deploy the web/admin images; desktop and mobile releases go through their stores/update channels (mobile:
+   signed Gradle / Xcode release builds, see `apps/mobile/README.md`).
 6. Watch the Grafana dashboard and alerts (settlement failures, engine backlog, 5xx rate, stale market data).
 
 ## Monitoring

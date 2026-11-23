@@ -135,5 +135,7 @@ millions of concurrent users are in [PERFORMANCE.md](PERFORMANCE.md); the load g
   httpOnly `SameSite=Strict` cookie (CSRF-protected by the custom `X-GC-Client` header).
 - **Desktop** (`apps/desktop`): Electron shell around the web build with a sandboxed preload bridge and
   OS-keychain token storage.
-- **Mobile** (`apps/mobile`): React Native (Expo) app with bottom tabs, secure token storage, biometrics and push.
+- **Mobile** (`apps/mobile`): bare React Native app (no Expo; native `android/` and `ios/` projects) with bottom
+  tabs, Keychain/Keystore token storage (react-native-keychain), biometric app lock, and push notifications through
+  Firebase Cloud Messaging (the workers send them with the FCM HTTP v1 API).
 - **Admin** (`apps/admin`): role/permission-aware back office over `/api/v1/admin`.
